@@ -23,7 +23,7 @@
       {
         "id": "tracker_blocking_rules",
         "enabled": true,
-        "path": "rules/tracker-rules.json"
+        "path": "data/tracker-rules.json"
       }
     ]
   },

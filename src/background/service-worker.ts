@@ -1,9 +1,9 @@
 /**
- * PRISM Background Service Worker
- * Handles core privacy protection and threat detection
+ * PRISM Background Service Worker - Phase 2: Privacy Guardian Core
+ * Handles tracker blocking, privacy scoring, and cookie management
  */
 
-// Types for better type safety
+// Enhanced types for Phase 2
 interface PrivacyScore {
   domain: string;
   score: number;
@@ -11,6 +11,8 @@ interface PrivacyScore {
   cookies: number;
   isHTTPS: boolean;
   timestamp: Date;
+  blockedRequests: number;
+  trackerCategories: string[];
 }
 
 interface ThreatAnalysis {
@@ -21,25 +23,54 @@ interface ThreatAnalysis {
   reasons: string[];
 }
 
+interface TrackerDomains {
+  analytics: string[];
+  advertising: string[];
+  social: string[];
+  heatmaps: string[];
+  fingerprinting: string[];
+  marketing: string[];
+}
+
+interface BlockingStats {
+  totalBlocked: number;
+  sessionsBlocked: number;
+  categoriesBlocked: { [key: string]: number };
+  domainsBlocked: Set<string>;
+}
+
 class PrismBackgroundService {
   private privacyScores = new Map<string, PrivacyScore>();
   private blockedTrackers = new Set<string>();
+  private blockingStats: BlockingStats;
+  private trackerDomains: TrackerDomains | null = null;
   
   constructor() {
+    this.blockingStats = {
+      totalBlocked: 0,
+      sessionsBlocked: 0,
+      categoriesBlocked: {},
+      domainsBlocked: new Set()
+    };
     this.initializeExtension();
   }
   
   private async initializeExtension(): Promise<void> {
-    console.log('🛡️ PRISM Extension Initialized');
+    console.log('🛡️ PRISM Extension Initialized - Phase 2: Privacy Guardian Core');
     
-    // Note: webRequest API will be replaced with declarativeNetRequest in Phase 2
-    // For now, we'll focus on tab-based privacy scoring
+    // Load tracker domains database
+    await this.loadTrackerDomains();
+    
+    // Setup declarative net request rules for tracker blocking
+    await this.setupTrackerBlocking();
     
     // Setup tab updates for privacy scoring
     chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
     
-    // Load tracker blocking rules
-    await this.loadTrackerRules();
+    // Setup declarative net request event listener
+    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(this.handleBlockedRequest.bind(this));
+    
+    console.log('🚫 Tracker blocking active with', this.getTrackerCount(), 'known trackers');
   }
   
   // Will be implemented in Phase 2 with declarativeNetRequest
@@ -90,13 +121,18 @@ class PrismBackgroundService {
     
     score = Math.max(0, Math.round(score));
     
+    const blockedCount = this.blockingStats.domainsBlocked.size;
+    const categories = this.getTrackerCategoriesForDomain(domain);
+    
     return {
       domain,
       score,
       trackers: trackerCount,
       cookies: cookieCount,
       isHTTPS,
-      timestamp: new Date()
+      timestamp: new Date(),
+      blockedRequests: blockedCount,
+      trackerCategories: categories
     };
   }
   
@@ -130,13 +166,71 @@ class PrismBackgroundService {
     return commonTrackers.some(tracker => domain.includes(tracker));
   }
   
-  private async loadTrackerRules(): Promise<void> {
-    // Placeholder for loading tracker blocking rules
-    // Will be implemented in Phase 2
-    console.log('📋 Loading tracker blocking rules...');
+  private async loadTrackerDomains(): Promise<void> {
+    try {
+      const response = await fetch(chrome.runtime.getURL('data/tracker-domains.json'));
+      this.trackerDomains = await response.json();
+      console.log('📋 Loaded tracker domains database');
+    } catch (error) {
+      console.error('Failed to load tracker domains:', error);
+    }
   }
   
-  // Message handler for popup communication
+  private async setupTrackerBlocking(): Promise<void> {
+    try {
+      // The rules are loaded automatically from manifest.json
+      // We just need to enable them
+      console.log('🚫 Tracker blocking rules activated');
+    } catch (error) {
+      console.error('Failed to setup tracker blocking:', error);
+    }
+  }
+  
+  private handleBlockedRequest(details: any): void {
+    const domain = new URL(details.request.url).hostname;
+    this.blockedTrackers.add(domain);
+    this.blockingStats.totalBlocked++;
+    this.blockingStats.domainsBlocked.add(domain);
+    
+    // Update category statistics
+    const category = this.getTrackerCategory(domain);
+    if (category) {
+      this.blockingStats.categoriesBlocked[category] = 
+        (this.blockingStats.categoriesBlocked[category] || 0) + 1;
+    }
+    
+    console.log(`� Blocked tracker: ${domain} (${category || 'unknown'})`);
+  }
+  
+  private getTrackerCount(): number {
+    if (!this.trackerDomains) return 0;
+    return Object.values(this.trackerDomains).flat().length;
+  }
+  
+  private getTrackerCategory(domain: string): string | null {
+    if (!this.trackerDomains) return null;
+    
+    for (const [category, domains] of Object.entries(this.trackerDomains)) {
+      if (domains.some(trackerDomain => domain.includes(trackerDomain))) {
+        return category;
+      }
+    }
+    return null;
+  }
+  
+  private getTrackerCategoriesForDomain(domain: string): string[] {
+    if (!this.trackerDomains) return [];
+    
+    const categories: string[] = [];
+    for (const [category, domains] of Object.entries(this.trackerDomains)) {
+      if (domains.some(trackerDomain => domain.includes(trackerDomain))) {
+        categories.push(category);
+      }
+    }
+    return categories;
+  }
+  
+  // Enhanced message handler for Phase 2 features
   public handleMessage(
     message: any, 
     sender: chrome.runtime.MessageSender, 
@@ -151,8 +245,27 @@ class PrismBackgroundService {
       case 'GET_BLOCKED_TRACKERS':
         sendResponse({ 
           trackers: Array.from(this.blockedTrackers),
-          count: this.blockedTrackers.size 
+          count: this.blockedTrackers.size,
+          stats: this.blockingStats
         });
+        break;
+        
+      case 'GET_BLOCKING_STATS':
+        sendResponse({
+          totalBlocked: this.blockingStats.totalBlocked,
+          sessionsBlocked: this.blockingStats.sessionsBlocked,
+          categories: this.blockingStats.categoriesBlocked,
+          domains: Array.from(this.blockingStats.domainsBlocked)
+        });
+        break;
+        
+      case 'WHITELIST_DOMAIN':
+        // TODO: Implement domain whitelisting
+        sendResponse({ success: true, message: 'Domain whitelisting coming soon' });
+        break;
+        
+      case 'GET_TRACKER_CATEGORIES':
+        sendResponse({ categories: this.trackerDomains });
         break;
         
       default:

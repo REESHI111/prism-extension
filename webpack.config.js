@@ -62,6 +62,11 @@ module.exports = (env, argv) => {
             to: 'assets',
             noErrorOnMissing: true,
           },
+          {
+            from: 'src/data',
+            to: 'data',
+            noErrorOnMissing: true,
+          },
         ],
       }),
       

@@ -1,0 +1,64 @@
+{
+  "analytics": [
+    "google-analytics.com",
+    "googletagmanager.com",
+    "segment.com",
+    "mixpanel.com",
+    "amplitude.com",
+    "heap.com",
+    "kissmetrics.com",
+    "chartbeat.com",
+    "quantcast.com",
+    "comscore.com"
+  ],
+  "advertising": [
+    "doubleclick.net",
+    "googlesyndication.com",
+    "facebook.com",
+    "amazon-adsystem.com",
+    "adsystem.amazon.com",
+    "media.net",
+    "outbrain.com",
+    "taboola.com",
+    "criteo.com",
+    "adsrvr.org"
+  ],
+  "social": [
+    "connect.facebook.net",
+    "platform.twitter.com",
+    "apis.google.com",
+    "platform.linkedin.com",
+    "assets.pinterest.com",
+    "instagram.com",
+    "snapchat.com",
+    "tiktok.com"
+  ],
+  "heatmaps": [
+    "hotjar.com",
+    "mouseflow.com",
+    "crazyegg.com",
+    "fullstory.com",
+    "logrocket.com",
+    "clarity.ms",
+    "inspectlet.com",
+    "smartlook.com"
+  ],
+  "fingerprinting": [
+    "fingerprintjs.com",
+    "maxmind.com",
+    "trustpilot.com",
+    "device.bugsnag.com",
+    "sentry.io",
+    "bugsnag.com"
+  ],
+  "marketing": [
+    "hubspot.com",
+    "marketo.com",
+    "salesforce.com",
+    "mailchimp.com",
+    "constantcontact.com",
+    "pardot.com",
+    "eloqua.com",
+    "autopilot.com"
+  ]
+}
