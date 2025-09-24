@@ -125,11 +125,15 @@ class PrismBackgroundService {
     // Setup declarative net request rules for tracker blocking
     await this.setupTrackerBlocking();
     
-    // Setup tab updates for privacy scoring
-    chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
+    // Setup tab updates for privacy scoring (only if available)
+    if (chrome.tabs && chrome.tabs.onUpdated) {
+      chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
+    }
     
-    // Setup declarative net request event listener
-    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(this.handleBlockedRequest.bind(this));
+    // Setup declarative net request event listener (only if available)
+    if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.onRuleMatchedDebug) {
+      chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(this.handleBlockedRequest.bind(this));
+    }
     
     console.log('🚫 Tracker blocking active with', this.getTrackerCount(), 'known trackers');
     console.log('🍪 Cookie management system initialized');

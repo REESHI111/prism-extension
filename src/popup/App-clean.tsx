@@ -160,7 +160,6 @@ const App: React.FC = () => {
           type: 'WHITELIST_DOMAIN',
           domain: domain
         });
-        console.log(`✅ Domain ${domain} added to whitelist`);
       }
     } catch (error) {
       console.error('Error whitelisting domain:', error);
@@ -174,23 +173,10 @@ const App: React.FC = () => {
           type: 'BLOCK_DOMAIN',
           domain: domain
         });
-        console.log(`🚫 Domain ${domain} added to blocklist`);
       }
     } catch (error) {
       console.error('Error blocking domain:', error);
     }
-  };
-
-  const openFullDashboard = () => {
-    console.log('📊 Opening full dashboard...');
-  };
-
-  const showPrivacyTips = () => {
-    console.log('💡 Showing privacy tips...');
-  };
-
-  const openSettings = () => {
-    console.log('⚙️ Opening settings...');
   };
 
   const getScoreColor = (score: number): string => {
