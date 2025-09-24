@@ -3,6 +3,9 @@
  * Handles tracker blocking, privacy scoring, and cookie management
  */
 
+// Import cookie manager
+// Note: Import will be handled differently in production build
+
 // Enhanced types for Phase 2
 interface PrivacyScore {
   domain: string;
@@ -44,6 +47,7 @@ class PrismBackgroundService {
   private blockedTrackers = new Set<string>();
   private blockingStats: BlockingStats;
   private trackerDomains: TrackerDomains | null = null;
+  private cookieManager: any = null; // Will be initialized properly
   
   constructor() {
     this.blockingStats = {
@@ -52,9 +56,66 @@ class PrismBackgroundService {
       categoriesBlocked: {},
       domainsBlocked: new Set()
     };
+    this.initializeCookieManager();
     this.initializeExtension();
   }
   
+  private initializeCookieManager(): void {
+    // Initialize cookie manager with inline implementation
+    this.cookieManager = {
+      cookiePatterns: {},
+      cookieStats: new Map(),
+      blockedCookies: new Set(),
+      
+      async loadCookiePatterns() {
+        try {
+          const response = await fetch(chrome.runtime.getURL('data/cookie-patterns.json'));
+          this.cookiePatterns = await response.json();
+          console.log('🍪 Cookie patterns loaded');
+        } catch (error) {
+          console.error('Failed to load cookie patterns:', error);
+        }
+      },
+      
+      classifyCookie(cookieName: string, domain: string) {
+        const name = cookieName.toLowerCase();
+        for (const [category, patterns] of Object.entries(this.cookiePatterns)) {
+          const patternArray = Array.isArray(patterns) ? patterns : [];
+          for (const pattern of patternArray) {
+            if (name.includes(pattern.toLowerCase()) || 
+                domain.includes(pattern.toLowerCase())) {
+              return category;
+            }
+          }
+        }
+        return 'unknown';
+      },
+      
+      async analyzeDomainCookies(domain: string) {
+        try {
+          const cookies = await chrome.cookies.getAll({ domain });
+          return cookies.map(cookie => ({
+            name: cookie.name,
+            domain: cookie.domain,
+            category: this.classifyCookie(cookie.name, cookie.domain),
+            isTracking: this.isTrackingCookie(cookie.name)
+          }));
+        } catch (error) {
+          console.error('Error analyzing cookies:', error);
+          return [];
+        }
+      },
+      
+      isTrackingCookie(cookieName: string) {
+        const trackingPatterns = ['_ga', '_gid', '_fbp', '_fbc', '__utm', '_hjid'];
+        return trackingPatterns.some(pattern => cookieName.includes(pattern));
+      }
+    };
+    
+    // Load cookie patterns
+    this.cookieManager.loadCookiePatterns();
+  }
+
   private async initializeExtension(): Promise<void> {
     console.log('🛡️ PRISM Extension Initialized - Phase 2: Privacy Guardian Core');
     
@@ -71,6 +132,7 @@ class PrismBackgroundService {
     chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(this.handleBlockedRequest.bind(this));
     
     console.log('🚫 Tracker blocking active with', this.getTrackerCount(), 'known trackers');
+    console.log('🍪 Cookie management system initialized');
   }
   
   // Will be implemented in Phase 2 with declarativeNetRequest
@@ -111,13 +173,16 @@ class PrismBackgroundService {
       .filter(tracker => tracker.includes(domain)).length;
     
     const isHTTPS = url.startsWith('https://');
-    const cookieCount = await this.getCookieCount(domain);
+    const cookieData = await this.analyzeCookiesForDomain(domain);
+    const cookieCount = cookieData.total;
+    const trackingCookieCount = cookieData.tracking;
     
-    // Privacy score calculation (0-100)
+    // Enhanced privacy score calculation (0-100)
     let score = 100;
-    score -= Math.min(trackerCount * 5, 50); // Max 50 points deduction for trackers
-    score -= Math.min(cookieCount * 2, 30);   // Max 30 points for cookies
-    score -= isHTTPS ? 0 : 20;               // 20 points deduction for HTTP
+    score -= Math.min(trackerCount * 5, 40);           // Max 40 points for trackers
+    score -= Math.min(trackingCookieCount * 3, 30);    // Max 30 points for tracking cookies
+    score -= Math.min(cookieCount * 1, 20);            // Max 20 points for total cookies
+    score -= isHTTPS ? 0 : 10;                         // 10 points deduction for HTTP
     
     score = Math.max(0, Math.round(score));
     
@@ -134,6 +199,33 @@ class PrismBackgroundService {
       blockedRequests: blockedCount,
       trackerCategories: categories
     };
+  }
+  
+  private async analyzeCookiesForDomain(domain: string): Promise<{total: number, tracking: number, categories: any}> {
+    try {
+      if (this.cookieManager) {
+        const cookies = await this.cookieManager.analyzeDomainCookies(domain);
+        const tracking = cookies.filter((c: any) => c.isTracking || c.category === 'tracking').length;
+        const categories = cookies.reduce((acc: any, cookie: any) => {
+          acc[cookie.category] = (acc[cookie.category] || 0) + 1;
+          return acc;
+        }, {});
+        
+        return {
+          total: cookies.length,
+          tracking,
+          categories
+        };
+      }
+      
+      // Fallback to basic cookie count
+      const cookieCount = await this.getCookieCount(domain);
+      return { total: cookieCount, tracking: 0, categories: {} };
+      
+    } catch (error) {
+      console.error('Error analyzing cookies for domain:', domain, error);
+      return { total: 0, tracking: 0, categories: {} };
+    }
   }
   
   private async getCookieCount(domain: string): Promise<number> {
@@ -268,6 +360,15 @@ class PrismBackgroundService {
         sendResponse({ categories: this.trackerDomains });
         break;
         
+      case 'GET_COOKIE_ANALYSIS':
+        this.analyzeCookiesForDomain(message.domain).then(cookieData => {
+          sendResponse(cookieData);
+        }).catch(error => {
+          console.error('Cookie analysis error:', error);
+          sendResponse({ total: 0, tracking: 0, categories: {} });
+        });
+        break;
+        
       default:
         sendResponse({ error: 'Unknown message type' });
     }
@@ -279,8 +380,12 @@ const prismService = new PrismBackgroundService();
 
 // Setup message listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  prismService.handleMessage(message, sender, sendResponse);
-  return true; // Keep message channel open for async responses
+  const result = prismService.handleMessage(message, sender, sendResponse);
+  // Keep message channel open for async responses
+  if (message.type === 'GET_COOKIE_ANALYSIS') {
+    return true;
+  }
+  return result;
 });
 
 // Log extension startup

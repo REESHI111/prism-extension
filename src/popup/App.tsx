@@ -12,11 +12,19 @@ interface PrivacyScore {
 interface BlockedTrackersData {
   trackers: string[];
   count: number;
+  stats?: any;
+}
+
+interface CookieData {
+  total: number;
+  tracking: number;
+  categories: { [key: string]: number };
 }
 
 const App: React.FC = () => {
   const [privacyScore, setPrivacyScore] = useState<PrivacyScore | null>(null);
   const [blockedTrackers, setBlockedTrackers] = useState<BlockedTrackersData>({ trackers: [], count: 0 });
+  const [cookieData, setCookieData] = useState<CookieData>({ total: 0, tracking: 0, categories: {} });
   const [currentDomain, setCurrentDomain] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +59,16 @@ const App: React.FC = () => {
 
           if (trackersResponse) {
             setBlockedTrackers(trackersResponse);
+          }
+
+          // Get cookie analysis
+          const cookieResponse = await chrome.runtime.sendMessage({
+            type: 'GET_COOKIE_ANALYSIS',
+            domain: domain
+          });
+
+          if (cookieResponse) {
+            setCookieData(cookieResponse);
           }
         }
       } else {
@@ -157,14 +175,26 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="text-center p-3 bg-red-50 rounded-lg">
             <div className="text-2xl font-bold text-red-600">{blockedTrackers.count}</div>
             <div className="text-xs text-red-600">Trackers Blocked</div>
           </div>
-          <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">0</div>
-            <div className="text-xs text-blue-600">Threats Detected</div>
+          <div className="text-center p-3 bg-orange-50 rounded-lg">
+            <div className="text-2xl font-bold text-orange-600">{cookieData.tracking}</div>
+            <div className="text-xs text-orange-600">Tracking Cookies</div>
+          </div>
+        </div>
+        
+        {/* Cookie Analysis */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-3 bg-yellow-50 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-600">{cookieData.total}</div>
+            <div className="text-xs text-yellow-600">Total Cookies</div>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">{cookieData.total - cookieData.tracking}</div>
+            <div className="text-xs text-green-600">Safe Cookies</div>
           </div>
         </div>
       </div>
