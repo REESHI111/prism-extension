@@ -37,12 +37,14 @@ const App: React.FC = () => {
   const loadCurrentTabData = async () => {
     try {
       if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime) {
+        // Get current tab
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         
         if (tab.url) {
           const domain = new URL(tab.url).hostname;
           setCurrentDomain(domain);
 
+          // Get privacy score from background script
           const scoreResponse = await chrome.runtime.sendMessage({
             type: 'GET_PRIVACY_SCORE',
             domain: domain
@@ -52,6 +54,7 @@ const App: React.FC = () => {
             setPrivacyScore(scoreResponse.score);
           }
 
+          // Get blocked trackers
           const trackersResponse = await chrome.runtime.sendMessage({
             type: 'GET_BLOCKED_TRACKERS'
           });
@@ -60,6 +63,7 @@ const App: React.FC = () => {
             setBlockedTrackers(trackersResponse);
           }
 
+          // Get cookie analysis
           const cookieResponse = await chrome.runtime.sendMessage({
             type: 'GET_COOKIE_ANALYSIS',
             domain: domain
@@ -70,6 +74,7 @@ const App: React.FC = () => {
           }
         }
       } else {
+        // Fallback for development
         setCurrentDomain('example.com');
       }
     } catch (error) {
@@ -79,6 +84,19 @@ const App: React.FC = () => {
     }
   };
 
+  const getScoreColor = (score: number): string => {
+    if (score >= 80) return 'text-green-600';
+    if (score >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getScoreBgColor = (score: number): string => {
+    if (score >= 80) return 'bg-green-100';
+    if (score >= 60) return 'bg-yellow-100';
+    return 'bg-red-100';
+  };
+
+  // Domain management functions
   const handleWhitelistDomain = async (domain: string) => {
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime) {
@@ -86,6 +104,7 @@ const App: React.FC = () => {
           type: 'WHITELIST_DOMAIN',
           domain: domain
         });
+        // Show success message or update UI
         console.log(`✅ Domain ${domain} added to whitelist`);
       }
     } catch (error) {
@@ -107,16 +126,21 @@ const App: React.FC = () => {
     }
   };
 
+  // Navigation functions
   const openFullDashboard = () => {
+    // In a real extension, this would open a full dashboard page
     console.log('📊 Opening full dashboard...');
+    // For now, just log the action
   };
 
   const showPrivacyTips = () => {
     console.log('💡 Showing privacy tips...');
+    // Could open an education modal or new tab
   };
 
   const openSettings = () => {
     console.log('⚙️ Opening settings...');
+    // Could open a settings page or modal
   };
 
   if (loading) {
@@ -333,44 +357,24 @@ const App: React.FC = () => {
         <div className="space-y-3">
           <button 
             onClick={() => openFullDashboard()}
-            className="w-full glass-button p-4 hover:bg-purple-500/20 transition-all duration-200 rounded-lg flex items-center space-x-3 group"
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
           >
-            <div className="w-8 h-8 glass-card rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-              <span className="text-purple-300">📊</span>
-            </div>
-            <div className="text-left flex-1">
-              <div className="text-white font-medium text-sm">Detailed Statistics</div>
-              <div className="text-white/60 text-xs">View comprehensive analytics</div>
-            </div>
-            <span className="text-white/40 group-hover:text-white/80 transition-colors">→</span>
+            <span className="text-purple-600">📊</span>
+            <span className="text-sm">Detailed Statistics</span>
           </button>
-          
           <button 
             onClick={() => showPrivacyTips()}
-            className="w-full glass-button p-4 hover:bg-green-500/20 transition-all duration-200 rounded-lg flex items-center space-x-3 group"
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
           >
-            <div className="w-8 h-8 glass-card rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-              <span className="text-green-300">💡</span>
-            </div>
-            <div className="text-left flex-1">
-              <div className="text-white font-medium text-sm">Privacy Tips</div>
-              <div className="text-white/60 text-xs">Learn protection strategies</div>
-            </div>
-            <span className="text-white/40 group-hover:text-white/80 transition-colors">→</span>
+            <span className="text-green-600">�</span>
+            <span className="text-sm">Privacy Tips</span>
           </button>
-          
           <button 
             onClick={() => openSettings()}
-            className="w-full glass-button p-4 hover:bg-blue-500/20 transition-all duration-200 rounded-lg flex items-center space-x-3 group"
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
           >
-            <div className="w-8 h-8 glass-card rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-              <span className="text-blue-300">⚙️</span>
-            </div>
-            <div className="text-left flex-1">
-              <div className="text-white font-medium text-sm">Settings</div>
-              <div className="text-white/60 text-xs">Customize your protection</div>
-            </div>
-            <span className="text-white/40 group-hover:text-white/80 transition-colors">→</span>
+            <span className="text-blue-600">⚙️</span>
+            <span className="text-sm">Settings</span>
           </button>
         </div>
       </div>
