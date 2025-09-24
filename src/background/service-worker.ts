@@ -32,12 +32,8 @@ class PrismBackgroundService {
   private async initializeExtension(): Promise<void> {
     console.log('🛡️ PRISM Extension Initialized');
     
-    // Setup request monitoring
-    chrome.webRequest?.onBeforeRequest.addListener(
-      this.handleWebRequest.bind(this),
-      { urls: ['<all_urls>'] },
-      ['requestBody']
-    );
+    // Note: webRequest API will be replaced with declarativeNetRequest in Phase 2
+    // For now, we'll focus on tab-based privacy scoring
     
     // Setup tab updates for privacy scoring
     chrome.tabs.onUpdated.addListener(this.handleTabUpdate.bind(this));
@@ -46,24 +42,7 @@ class PrismBackgroundService {
     await this.loadTrackerRules();
   }
   
-  private handleWebRequest(details: chrome.webRequest.WebRequestBodyDetails): void {
-    try {
-      const url = new URL(details.url);
-      const domain = url.hostname;
-      
-      // Check if this is a known tracker
-      if (this.isTracker(domain)) {
-        this.blockedTrackers.add(domain);
-        console.log(`🚫 Blocked tracker: ${domain}`);
-      }
-      
-      // Update privacy score for the tab
-      this.updatePrivacyScore(details.tabId, domain);
-      
-    } catch (error) {
-      console.error('Error handling web request:', error);
-    }
-  }
+  // Will be implemented in Phase 2 with declarativeNetRequest
   
   private async handleTabUpdate(
     tabId: number, 

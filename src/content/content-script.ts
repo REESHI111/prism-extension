@@ -228,25 +228,29 @@ class PrismContentScript {
     };
     
     // Send to background script
-    chrome.runtime.sendMessage({
-      type: 'PAGE_ANALYZED',
-      data: pageData
-    }).catch(error => {
-      console.error('Error sending page data:', error);
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: 'PAGE_ANALYZED',
+        data: pageData
+      }).catch((error: any) => {
+        console.error('Error sending page data:', error);
+      });
+    }
   }
   
   private reportThreats(threats: string[]): void {
-    chrome.runtime.sendMessage({
-      type: 'THREATS_DETECTED',
-      data: {
-        url: window.location.href,
-        threats,
-        timestamp: new Date().toISOString()
-      }
-    }).catch(error => {
-      console.error('Error reporting threats:', error);
-    });
+    if (typeof chrome !== 'undefined' && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        type: 'THREATS_DETECTED',
+        data: {
+          url: window.location.href,
+          threats,
+          timestamp: new Date().toISOString()
+        }
+      }).catch((error: any) => {
+        console.error('Error reporting threats:', error);
+      });
+    }
   }
 }
 

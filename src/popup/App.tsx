@@ -26,31 +26,36 @@ const App: React.FC = () => {
 
   const loadCurrentTabData = async () => {
     try {
-      // Get current tab
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      
-      if (tab.url) {
-        const domain = new URL(tab.url).hostname;
-        setCurrentDomain(domain);
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime) {
+        // Get current tab
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        
+        if (tab.url) {
+          const domain = new URL(tab.url).hostname;
+          setCurrentDomain(domain);
 
-        // Get privacy score from background script
-        const scoreResponse = await chrome.runtime.sendMessage({
-          type: 'GET_PRIVACY_SCORE',
-          domain: domain
-        });
+          // Get privacy score from background script
+          const scoreResponse = await chrome.runtime.sendMessage({
+            type: 'GET_PRIVACY_SCORE',
+            domain: domain
+          });
 
-        if (scoreResponse.score) {
-          setPrivacyScore(scoreResponse.score);
+          if (scoreResponse.score) {
+            setPrivacyScore(scoreResponse.score);
+          }
+
+          // Get blocked trackers
+          const trackersResponse = await chrome.runtime.sendMessage({
+            type: 'GET_BLOCKED_TRACKERS'
+          });
+
+          if (trackersResponse) {
+            setBlockedTrackers(trackersResponse);
+          }
         }
-
-        // Get blocked trackers
-        const trackersResponse = await chrome.runtime.sendMessage({
-          type: 'GET_BLOCKED_TRACKERS'
-        });
-
-        if (trackersResponse) {
-          setBlockedTrackers(trackersResponse);
-        }
+      } else {
+        // Fallback for development
+        setCurrentDomain('example.com');
       }
     } catch (error) {
       console.error('Error loading tab data:', error);
