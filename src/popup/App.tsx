@@ -7,6 +7,8 @@ interface PrivacyScore {
   cookies: number;
   isHTTPS: boolean;
   timestamp: Date;
+  blockedRequests: number;
+  trackerCategories: string[];
 }
 
 interface BlockedTrackersData {
@@ -94,6 +96,53 @@ const App: React.FC = () => {
     return 'bg-red-100';
   };
 
+  // Domain management functions
+  const handleWhitelistDomain = async (domain: string) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        await chrome.runtime.sendMessage({
+          type: 'WHITELIST_DOMAIN',
+          domain: domain
+        });
+        // Show success message or update UI
+        console.log(`✅ Domain ${domain} added to whitelist`);
+      }
+    } catch (error) {
+      console.error('Error whitelisting domain:', error);
+    }
+  };
+
+  const handleBlockDomain = async (domain: string) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        await chrome.runtime.sendMessage({
+          type: 'BLOCK_DOMAIN',
+          domain: domain
+        });
+        console.log(`🚫 Domain ${domain} added to blocklist`);
+      }
+    } catch (error) {
+      console.error('Error blocking domain:', error);
+    }
+  };
+
+  // Navigation functions
+  const openFullDashboard = () => {
+    // In a real extension, this would open a full dashboard page
+    console.log('📊 Opening full dashboard...');
+    // For now, just log the action
+  };
+
+  const showPrivacyTips = () => {
+    console.log('💡 Showing privacy tips...');
+    // Could open an education modal or new tab
+  };
+
+  const openSettings = () => {
+    console.log('⚙️ Opening settings...');
+    // Could open a settings page or modal
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -176,44 +225,100 @@ const App: React.FC = () => {
         </div>
         
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="text-center p-3 bg-red-50 rounded-lg">
+          <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
             <div className="text-2xl font-bold text-red-600">{blockedTrackers.count}</div>
             <div className="text-xs text-red-600">Trackers Blocked</div>
+            <div className="text-xs text-gray-500 mt-1">This Session</div>
           </div>
-          <div className="text-center p-3 bg-orange-50 rounded-lg">
+          <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
             <div className="text-2xl font-bold text-orange-600">{cookieData.tracking}</div>
             <div className="text-xs text-orange-600">Tracking Cookies</div>
+            <div className="text-xs text-gray-500 mt-1">Detected</div>
           </div>
         </div>
         
         {/* Cookie Analysis */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-3 bg-yellow-50 rounded-lg">
+          <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
             <div className="text-2xl font-bold text-yellow-600">{cookieData.total}</div>
             <div className="text-xs text-yellow-600">Total Cookies</div>
+            <div className="text-xs text-gray-500 mt-1">All Types</div>
           </div>
-          <div className="text-center p-3 bg-green-50 rounded-lg">
+          <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
             <div className="text-2xl font-bold text-green-600">{cookieData.total - cookieData.tracking}</div>
             <div className="text-xs text-green-600">Safe Cookies</div>
+            <div className="text-xs text-gray-500 mt-1">Functional</div>
           </div>
         </div>
       </div>
+
+      {/* Domain Actions */}
+      <div className="p-4 border-b">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Domain Actions</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button 
+            onClick={() => handleWhitelistDomain(currentDomain)}
+            className="p-2 bg-green-50 text-green-600 rounded-lg border border-green-200 hover:bg-green-100 text-xs font-medium"
+          >
+            ✅ Trust Site
+          </button>
+          <button 
+            onClick={() => handleBlockDomain(currentDomain)}
+            className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-200 hover:bg-red-100 text-xs font-medium"
+          >
+            🚫 Block Site
+          </button>
+        </div>
+      </div>
+
+      {/* Privacy Insights */}
+      {privacyScore && (
+        <div className="p-4 border-b">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Privacy Insights</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-600">Privacy Level</span>
+              <span className={`font-medium ${getScoreColor(privacyScore.score)}`}>
+                {privacyScore.score >= 80 ? 'Excellent' : 
+                 privacyScore.score >= 60 ? 'Good' : 'Poor'}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-600">Tracker Categories</span>
+              <span className="font-medium">{privacyScore.trackerCategories.length}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-600">Protection Active</span>
+              <span className="font-medium text-green-600">Yes</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div className="p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
         <div className="space-y-2">
-          <button className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3">
-            <span className="text-blue-600">⚙️</span>
-            <span className="text-sm">Settings</span>
+          <button 
+            onClick={() => openFullDashboard()}
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
+          >
+            <span className="text-purple-600">📊</span>
+            <span className="text-sm">Detailed Statistics</span>
           </button>
-          <button className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3">
-            <span className="text-green-600">📚</span>
+          <button 
+            onClick={() => showPrivacyTips()}
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
+          >
+            <span className="text-green-600">�</span>
             <span className="text-sm">Privacy Tips</span>
           </button>
-          <button className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3">
-            <span className="text-purple-600">📊</span>
-            <span className="text-sm">View Dashboard</span>
+          <button 
+            onClick={() => openSettings()}
+            className="w-full text-left p-3 bg-white rounded-lg border hover:bg-gray-50 flex items-center space-x-3"
+          >
+            <span className="text-blue-600">⚙️</span>
+            <span className="text-sm">Settings</span>
           </button>
         </div>
       </div>
