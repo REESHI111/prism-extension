@@ -1,55 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "PRISM - Privacy & Security Guardian",
+  "name": "PRISM - Privacy & Security",
   "version": "1.0.0",
-  "description": "Advanced privacy protection and intelligent phishing detection for safer browsing.",
-  
+  "description": "Advanced privacy protection and phishing detection extension",
   "permissions": [
-    "declarativeNetRequest",
     "storage",
     "tabs",
-    "activeTab",
-    "cookies",
-    "notifications",
-    "scripting"
+    "activeTab"
   ],
-  
   "host_permissions": [
     "<all_urls>"
   ],
-  
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "tracker_blocking_rules",
-        "enabled": true,
-        "path": "data/tracker-rules.json"
-      }
-    ]
-  },
-  
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background/service-worker.js"
   },
-  
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
+      "js": ["content/content-script.js"],
       "run_at": "document_start"
     }
   ],
-  
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "PRISM Privacy Guardian"
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_title": "PRISM - Privacy & Security"
   },
-  
-  "web_accessible_resources": [
-    {
-      "resources": ["assets/*"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
 }

@@ -1,0 +1,11 @@
+# Raw datasets for ML training
+
+Add your datasets here:
+- `phishing_urls.csv` - Known phishing URLs
+- `legitimate_urls.csv` - Legitimate URLs
+- `tracker_domains.csv` - Known tracker domains
+
+Sources:
+- PhishTank: https://phishtank.org/developer_info.php
+- OpenPhish: https://openphish.com/
+- Alexa Top Sites: https://www.alexa.com/topsites

@@ -1,31 +1,23 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "strict": false,
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "module": "CommonJS",
+    "lib": ["ES2020", "DOM"],
+    "jsx": "react",
+    "module": "ESNext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "isolatedModules": false,
+    "allowJs": true,
     "noEmit": false,
-    "jsx": "react-jsx",
-    "types": ["chrome", "node", "jest"],
-    "baseUrl": "./src",
-    "paths": {
-      "@/*": ["*"],
-      "@/components/*": ["components/*"],
-      "@/utils/*": ["utils/*"]
-    }
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "types": ["chrome"],
+    "outDir": "./dist"
   },
   "include": [
-    "src/**/*",
-    "*.d.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",

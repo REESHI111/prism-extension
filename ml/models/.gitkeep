@@ -1,0 +1,13 @@
+# This directory stores trained ML models
+
+## Directory Structure
+- `threat_detector/` - Phishing detection model
+- `privacy_scorer/` - Privacy scoring model
+- `tracker_classifier/` - Tracker classification model
+- `preprocessors/` - Feature preprocessing models
+
+## Files (after training)
+- `*.pkl` - Scikit-learn models
+- `*.h5` - Keras/TensorFlow models
+- `*.json` - Model metadata
+- `model_info.txt` - Model version and performance metrics

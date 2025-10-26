@@ -1,345 +1,41 @@
+/**
+ * PRISM Popup Styles
+ * Phase 1: Basic Tailwind-based styling
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Clean Professional Design for PRISM */
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #ffffff;
-  color: #1f2937;
-  width: 400px;
-  min-height: 600px;
-  max-height: 700px;
-  overflow-y: auto;
 }
 
-* {
-  box-sizing: border-box;
+#root {
+  min-width: 384px;
+  min-height: 400px;
 }
 
-/* Clean Card Design */
-.card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.card:hover {
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-color: #d1d5db;
-}
-
-.card-header {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.btn {
-  background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 12px;
-  padding: 12px 16px;
-  color: #374151;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  transform: translateY(-1px);
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: #ffffff;
-  border-color: #3b82f6;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-}
-
-.btn-success {
-  background: #10b981;
-  color: #ffffff;
-  border-color: #10b981;
-}
-
-.btn-success:hover {
-  background: #059669;
-  border-color: #059669;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: #ffffff;
-  border-color: #ef4444;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-  border-color: #dc2626;
-}
-
-/* Progress Bars */
-.progress-bar {
-  width: 100%;
-  height: 6px;
-  background: #f3f4f6;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 8px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #3b82f6;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.progress-fill.success {
-  background: #10b981;
-}
-
-.progress-fill.warning {
-  background: #f59e0b;
-}
-
-.progress-fill.danger {
-  background: #ef4444;
-}
-
-/* Stats Grid */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px;
-  text-align: center;
-  transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.stat-number {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 4px;
-}
-
-.stat-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Simple Animations */
-.fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.loading-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Score Circle */
-.score-circle {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-  border: 4px solid #e5e7eb;
-  position: relative;
-}
-
-.score-circle.excellent {
-  border-color: #10b981;
-  background: #ecfdf5;
-}
-
-.score-circle.good {
-  border-color: #f59e0b;
-  background: #fffbeb;  
-}
-
-.score-circle.poor {
-  border-color: #ef4444;
-  background: #fef2f2;
-}
-
-.score-text {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-/* Icons */
-.icon {
-  width: 20px;
-  height: 20px;
-  fill: currentColor;
-}
-
-.icon-sm {
-  width: 16px;
-  height: 16px;
-}
-
-.icon-lg {
-  width: 24px;
-  height: 24px;
-}
-
-/* Hidden Custom Scrollbar */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 0px;
-  background: transparent;
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: #888;
+  border-radius: 4px;
 }
 
-/* Status Indicators */
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 8px;
-}
-
-.status-dot.active {
-  background: #10b981;
-}
-
-.status-dot.warning {
-  background: #f59e0b;
-}
-
-.status-dot.danger {
-  background: #ef4444;
-}
-
-/* Header Section */
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-icon {
-  width: 40px;
-  height: 40px;
-  background: #3b82f6;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.logo-text h1 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 2px 0;
-}
-
-.logo-text p {
-  font-size: 12px;
-  color: #6b7280;
-  margin: 0;
-}
-
-.status-badge {
-  background: #ecfdf5;
-  color: #065f46;
-  border: 1px solid #d1fae5;
-  border-radius: 20px;
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Domain Info */
-.domain-info {
-  text-align: center;
-  margin-bottom: 4px;
-}
-
-.domain-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 4px;
-}
-
-.domain-status {
-  font-size: 12px;
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
