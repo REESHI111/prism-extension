@@ -1,13 +1,107 @@
 /**
  * PRISM Content Script
  * Phase 1: Basic Page Injection and Communication
+ * Phase 3: Fingerprint Protection
  * Enhanced: Warning overlay system for unsafe websites
  */
 
 import { createWarningOverlay, shouldShowWarning } from './warning-overlay';
 
-console.log('🔍 PRISM Content Script Loaded');
+console.log('🔍 PRISM Content Script Loaded - Phase 3');
 console.log('📍 Page:', window.location.href);
+
+// Inject fingerprint protection BEFORE page scripts load
+(function injectFingerprintProtection() {
+  const script = document.createElement('script');
+  script.textContent = `
+    // Canvas fingerprinting protection
+    (function() {
+      const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+      const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+      
+      const addNoise = (data) => {
+        if (!data || !data.data) return data;
+        for (let i = 0; i < data.data.length; i += 4) {
+          data.data[i] += Math.floor(Math.random() * 3) - 1;
+          data.data[i + 1] += Math.floor(Math.random() * 3) - 1;
+          data.data[i + 2] += Math.floor(Math.random() * 3) - 1;
+        }
+        return data;
+      };
+
+      HTMLCanvasElement.prototype.toDataURL = function(...args) {
+        console.log('🛡️ PRISM: Blocked canvas fingerprinting');
+        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'canvas' }, '*');
+        
+        const context = this.getContext('2d');
+        if (context) {
+          const imageData = context.getImageData(0, 0, this.width, this.height);
+          addNoise(imageData);
+          context.putImageData(imageData, 0, 0);
+        }
+        return originalToDataURL.apply(this, args);
+      };
+
+      CanvasRenderingContext2D.prototype.getImageData = function(...args) {
+        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'canvas' }, '*');
+        const imageData = originalGetImageData.apply(this, args);
+        return addNoise(imageData);
+      };
+    })();
+
+    // WebGL fingerprinting protection
+    (function() {
+      const getParameter = WebGLRenderingContext.prototype.getParameter;
+      
+      WebGLRenderingContext.prototype.getParameter = function(param) {
+        if (param === 37445 || param === 37446) {
+          console.log('🛡️ PRISM: Blocked WebGL fingerprinting');
+          window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'webgl' }, '*');
+          if (param === 37445) return 'Intel Inc.';
+          if (param === 37446) return 'Intel Iris OpenGL Engine';
+        }
+        return getParameter.call(this, param);
+      };
+    })();
+
+    // Audio fingerprinting protection
+    (function() {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      
+      const originalCreateOscillator = AudioContext.prototype.createOscillator;
+      
+      AudioContext.prototype.createOscillator = function() {
+        console.log('🛡️ PRISM: Detected audio fingerprinting');
+        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'audio' }, '*');
+        return originalCreateOscillator.call(this);
+      };
+    })();
+  `;
+  
+  (document.head || document.documentElement).appendChild(script);
+  script.remove();
+})();
+
+// Listen for fingerprint detection messages
+let fingerprintDetections = 0;
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  
+  if (event.data.type === 'PRISM_FINGERPRINT_DETECTED') {
+    fingerprintDetections++;
+    
+    // Report to background script
+    chrome.runtime.sendMessage({
+      type: 'FINGERPRINT_DETECTED',
+      method: event.data.method,
+      domain: window.location.hostname,
+      url: window.location.href
+    }).catch(() => {
+      // Ignore if background script is not ready
+    });
+  }
+});
 
 // Check if we should show warning overlay
 const currentUrl = window.location.href;
@@ -34,15 +128,19 @@ interface PrismDebug {
   phase: number;
   url: string;
   injectedAt: string;
+  fingerprintDetections: number;
   showWarning?: (config?: any) => void;
 }
 
 (window as any).PRISM = {
   version: '1.0.0',
   active: true,
-  phase: 1,
+  phase: 3,
   url: window.location.href,
   injectedAt: new Date().toISOString(),
+  get fingerprintDetections() {
+    return fingerprintDetections;
+  },
   // Allow manual triggering of warning overlay for testing
   showWarning: (config?: any) => {
     const testConfig = config || {
@@ -75,7 +173,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           title: document.title,
           domain: window.location.hostname,
           protocol: window.location.protocol,
-          readyState: document.readyState
+          readyState: document.readyState,
+          fingerprintDetections
         }
       });
       break;
@@ -101,5 +200,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Log successful injection
-console.log('✅ PRISM Content Script Ready');
-console.log('🧪 Test warning: window.PRISM.showWarning()');
+console.log('✅ PRISM Content Script Ready - Phase 3');
+console.log('🛡️ Fingerprint protection active');
+console.log('🧪 Test: window.PRISM.fingerprintDetections');
+

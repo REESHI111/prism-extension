@@ -82,7 +82,7 @@ const App: React.FC = () => {
   const [tabInfo, setTabInfo] = useState<TabInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [metrics, setMetrics] = useState<SecurityMetrics>({
-    overallScore: 95,
+    overallScore: 100,
     trackersBlocked: 0,
     cookiesManaged: 0,
     requestsAnalyzed: 0,
@@ -93,19 +93,66 @@ const App: React.FC = () => {
   useEffect(() => {
     initializeExtension();
     calculateSecurityMetrics();
+    
+    // Listen for stats updates
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'STATS_UPDATED') {
+        loadRealTimeStats();
+      }
+    });
+
+    // Poll for stats every 2 seconds to ensure real-time updates
+    const statsInterval = setInterval(() => {
+      loadRealTimeStats();
+    }, 2000);
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(statsInterval);
+    };
   }, []);
 
+  const loadRealTimeStats = async () => {
+    try {
+      // Get current tab info
+      const tabResponse = await chrome.runtime.sendMessage({ type: 'GET_TAB_INFO' });
+      if (tabResponse?.status === 'OK' && tabResponse.data) {
+        const domain = tabResponse.data.domain;
+        
+        // Get site-specific stats
+        const statsResponse = await chrome.runtime.sendMessage({ 
+          type: 'GET_SITE_STATS',
+          domain 
+        });
+        
+        if (statsResponse?.status === 'OK') {
+          const siteData = statsResponse.data;
+          // If no stats exist for this site, it will be null - that's OK, show zeros
+          const score = siteData?.securityScore ?? 100;
+          const trackers = siteData?.trackersBlocked ?? 0;
+          const cookies = siteData?.cookiesBlocked ?? 0;
+          const requests = siteData?.requestsAnalyzed ?? 0;
+          const threats = siteData?.threatsDetected ?? 0;
+          
+          console.log('📊 Stats loaded:', { domain, score, trackers, cookies, requests, threats });
+          
+          setMetrics({
+            overallScore: score,
+            trackersBlocked: trackers,
+            cookiesManaged: cookies,
+            requestsAnalyzed: requests,
+            malwareThreats: threats,
+            privacyRating: getScoreRating(score) as any
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load real-time stats:', error);
+    }
+  };
+
   const calculateSecurityMetrics = () => {
-    // This will be enhanced with real data from service worker
-    // For now, demo values
-    setMetrics({
-      overallScore: 95,
-      trackersBlocked: 0,
-      cookiesManaged: 0,
-      requestsAnalyzed: 0,
-      malwareThreats: 0,
-      privacyRating: 'Excellent'
-    });
+    loadRealTimeStats();
   };
 
   const initializeExtension = async () => {

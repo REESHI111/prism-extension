@@ -6,7 +6,12 @@
   "permissions": [
     "storage",
     "tabs",
-    "activeTab"
+    "activeTab",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "declarativeNetRequestFeedback",
+    "cookies",
+    "webRequest"
   ],
   "host_permissions": [
     "<all_urls>"
