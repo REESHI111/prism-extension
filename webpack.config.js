@@ -7,7 +7,7 @@ module.exports = {
   entry: {
     'background/service-worker': './src/background/service-worker.ts',
     'content/content-script': './src/content/content-script.ts',
-    'popup/index': './src/popup/index.tsx',
+    'popup': './src/popup/index.tsx',
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -33,13 +33,15 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/popup/popup.html',
-      filename: 'popup/popup.html',
-      chunks: ['popup/index'],
+      filename: 'popup.html',
+      chunks: ['popup'],
+      inject: 'body',
+      scriptLoading: 'defer'
     }),
     new CopyPlugin({
       patterns: [
         { from: 'public/manifest.json', to: 'manifest.json' },
-        { from: 'src/data', to: 'data' },
+        { from: 'public/*.png', to: '[name][ext]' },
       ],
     }),
   ],
