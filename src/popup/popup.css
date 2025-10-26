@@ -125,24 +125,28 @@ body {
   box-shadow: 0 20px 40px -12px rgba(16, 185, 129, 0.2);
 }
 
-/* Smooth Scrollbar - Dark Theme */
+/* Hidden Scrollbar - Maintain Functionality */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 0px;
+  height: 0px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.3);
-  border-radius: 3px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
-  transition: background 0.2s;
+  background: transparent;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+/* Firefox - Hide scrollbar */
+* {
+  scrollbar-width: none;
+}
+
+/* IE/Edge - Hide scrollbar */
+* {
+  -ms-overflow-style: none;
 }
 
 /* Premium Border Gradient */

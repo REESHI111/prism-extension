@@ -5,6 +5,53 @@
 
 import React, { useState, useEffect } from 'react';
 
+// Icon Components
+const ShieldIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
+const XIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  </svg>
+);
+
+const CookieIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/>
+    <circle cx="8.5" cy="8.5" r="0.5" fill="currentColor"/>
+    <circle cx="12" cy="12" r="0.5" fill="currentColor"/>
+    <circle cx="8" cy="14" r="0.5" fill="currentColor"/>
+  </svg>
+);
+
+const BarChartIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="20" x2="12" y2="10"/>
+    <line x1="18" y1="20" x2="18" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="16"/>
+  </svg>
+);
+
 interface ExtensionStatus {
   active: boolean;
   version: string;
@@ -132,7 +179,11 @@ const App: React.FC = () => {
           <div className="relative w-20 h-20 mx-auto mb-4">
             <div className="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-t-emerald-400 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center text-3xl">🛡️</div>
+            <div className="absolute inset-0 flex items-center justify-center text-emerald-400">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
           </div>
           <p className="text-slate-300 font-medium">Loading PRISM...</p>
         </div>
@@ -146,8 +197,8 @@ const App: React.FC = () => {
       <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-xl border-b border-slate-700/50 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <span className="text-xl">🛡️</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white">
+              <ShieldIcon />
             </div>
             <div>
               <h1 className="text-xl font-bold text-white tracking-tight">PRISM</h1>
@@ -224,8 +275,8 @@ const App: React.FC = () => {
                     <span className="text-slate-400 text-xs font-medium uppercase tracking-wider">Current Site</span>
                   </div>
                   <div className="flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700/50">
-                    <div className="w-8 h-8 bg-slate-700/50 rounded-lg flex items-center justify-center text-sm">
-                      {tabInfo.protocol === 'https:' ? '🔒' : '⚠️'}
+                    <div className="w-8 h-8 bg-slate-700/50 rounded-lg flex items-center justify-center text-emerald-400">
+                      {tabInfo.protocol === 'https:' ? <LockIcon /> : <AlertIcon />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium text-sm truncate">{tabInfo.domain}</p>
@@ -245,8 +296,8 @@ const App: React.FC = () => {
           {/* Trackers Blocked */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                <span className="text-lg">🚫</span>
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                <XIcon />
               </div>
               <span className="text-slate-400 text-xs font-medium">Trackers</span>
             </div>
@@ -257,8 +308,8 @@ const App: React.FC = () => {
           {/* Cookies Managed */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                <span className="text-lg">🍪</span>
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                <CookieIcon />
               </div>
               <span className="text-slate-400 text-xs font-medium">Cookies</span>
             </div>
@@ -269,8 +320,8 @@ const App: React.FC = () => {
           {/* Requests Analyzed */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                <span className="text-lg">📊</span>
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                <BarChartIcon />
               </div>
               <span className="text-slate-400 text-xs font-medium">Requests</span>
             </div>
@@ -281,8 +332,10 @@ const App: React.FC = () => {
           {/* Malware Threats */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-                <span className="text-lg">🛡️</span>
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
               </div>
               <span className="text-slate-400 text-xs font-medium">Threats</span>
             </div>
