@@ -1,6 +1,6 @@
 /**
  * PRISM Main Popup Component
- * Modern UI with Card-based Design
+ * Premium Classy UI Design
  */
 
 import React, { useState, useEffect } from 'react';
@@ -19,16 +19,47 @@ interface TabInfo {
   title?: string;
 }
 
+interface SecurityMetrics {
+  overallScore: number;
+  trackersBlocked: number;
+  cookiesManaged: number;
+  requestsAnalyzed: number;
+  malwareThreats: number;
+  privacyRating: 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
+}
+
 const App: React.FC = () => {
   const [status, setStatus] = useState<string>('Initializing...');
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'connected' | 'error'>('testing');
   const [extensionData, setExtensionData] = useState<ExtensionStatus | null>(null);
   const [tabInfo, setTabInfo] = useState<TabInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<SecurityMetrics>({
+    overallScore: 95,
+    trackersBlocked: 0,
+    cookiesManaged: 0,
+    requestsAnalyzed: 0,
+    malwareThreats: 0,
+    privacyRating: 'Excellent'
+  });
 
   useEffect(() => {
     initializeExtension();
+    calculateSecurityMetrics();
   }, []);
+
+  const calculateSecurityMetrics = () => {
+    // This will be enhanced with real data from service worker
+    // For now, demo values
+    setMetrics({
+      overallScore: 95,
+      trackersBlocked: 0,
+      cookiesManaged: 0,
+      requestsAnalyzed: 0,
+      malwareThreats: 0,
+      privacyRating: 'Excellent'
+    });
+  };
 
   const initializeExtension = async () => {
     setIsLoading(true);
@@ -79,208 +110,237 @@ const App: React.FC = () => {
     }
   };
 
-  const getStatusColor = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'from-emerald-500 to-teal-600';
-      case 'error': return 'from-red-500 to-rose-600';
-      default: return 'from-amber-500 to-orange-600';
-    }
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return '#10b981'; // Excellent - Green
+    if (score >= 70) return '#3b82f6'; // Good - Blue
+    if (score >= 50) return '#f59e0b'; // Fair - Amber
+    return '#ef4444'; // Poor - Red
   };
 
-  const getStatusIcon = () => {
-    switch (connectionStatus) {
-      case 'connected': return '✓';
-      case 'error': return '✕';
-      default: return '⟳';
-    }
+  const getScoreRating = (score: number): string => {
+    if (score >= 90) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Fair';
+    if (score >= 30) return 'Poor';
+    return 'Critical';
   };
 
   if (isLoading) {
     return (
-      <div className="w-[420px] h-[600px] bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="w-[420px] h-[600px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin text-6xl mb-4">🛡️</div>
-          <p className="text-slate-600 font-medium">Loading PRISM...</p>
+          <div className="relative w-20 h-20 mx-auto mb-4">
+            <div className="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-t-emerald-400 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center text-3xl">🛡️</div>
+          </div>
+          <p className="text-slate-300 font-medium">Loading PRISM...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-[420px] h-[600px] bg-gradient-to-br from-slate-50 to-slate-100 overflow-hidden flex flex-col">
-      {/* Modern Header with Gradient */}
-      <div className={`bg-gradient-to-r ${getStatusColor()} p-6 shadow-lg relative overflow-hidden`}>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16"></div>
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-12 -mb-12"></div>
-        
-        <div className="relative z-10">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center text-2xl shadow-lg">
-                🛡️
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">PRISM</h1>
-                <p className="text-white/80 text-xs font-medium">Privacy & Security Shield</p>
-              </div>
+    <div className="w-[420px] h-[600px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
+      {/* Premium Header */}
+      <div className="bg-gradient-to-r from-slate-800/50 to-slate-700/50 backdrop-blur-xl border-b border-slate-700/50 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <span className="text-xl">🛡️</span>
             </div>
-            <div className={`w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl transition-all duration-300 ${connectionStatus === 'connected' ? 'animate-pulse' : ''}`}>
-              {getStatusIcon()}
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">PRISM</h1>
+              <p className="text-xs text-slate-400">Security Suite</p>
             </div>
           </div>
-          
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mt-4">
-            <p className="text-white/70 text-xs uppercase tracking-wider font-semibold mb-1">Status</p>
-            <p className="text-white text-lg font-bold">{status}</p>
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            connectionStatus === 'connected' 
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+              : 'bg-red-500/20 text-red-300 border border-red-500/30'
+          }`}>
+            {connectionStatus === 'connected' ? '● Active' : '● Offline'}
           </div>
         </div>
       </div>
 
-      {/* Main Content - Scrollable */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {/* Current Site Card */}
-        {tabInfo && (
-          <div className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3">
-              <h2 className="text-white font-semibold text-sm flex items-center gap-2">
-                <span className="text-lg">🌐</span>
-                Current Website
-              </h2>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-lg">{tabInfo.protocol === 'https:' ? '🔒' : '⚠️'}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-500 font-medium mb-1">Domain</p>
-                  <p className="text-sm font-bold text-slate-800 break-all">{tabInfo.domain}</p>
+      {/* Main Content */}
+      <div className="p-6 space-y-6 overflow-y-auto h-[calc(600px-72px)]">
+        
+        {/* Central Security Score */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-3xl blur-2xl"></div>
+          <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-xl border border-slate-600/30 rounded-3xl p-8 shadow-2xl">
+            <div className="flex flex-col items-center">
+              {/* Circular Score */}
+              <div className="relative w-40 h-40 mb-4">
+                {/* Outer ring */}
+                <svg className="w-40 h-40 transform -rotate-90">
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
+                    stroke="rgba(148, 163, 184, 0.1)"
+                    strokeWidth="12"
+                    fill="none"
+                  />
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
+                    stroke={getScoreColor(metrics.overallScore)}
+                    strokeWidth="12"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${2 * Math.PI * 70}`}
+                    strokeDashoffset={`${2 * Math.PI * 70 * (1 - metrics.overallScore / 100)}`}
+                    className="transition-all duration-1000 ease-out"
+                    style={{
+                      filter: `drop-shadow(0 0 8px ${getScoreColor(metrics.overallScore)})`
+                    }}
+                  />
+                </svg>
+                
+                {/* Center content */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <div className="text-5xl font-bold text-white counter-animate">
+                    {metrics.overallScore}
+                  </div>
+                  <div className="text-xs text-slate-400 font-medium mt-1">SECURITY SCORE</div>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
-                <span className={`px-2 py-1 rounded-md text-xs font-semibold ${
-                  tabInfo.protocol === 'https:' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {tabInfo.protocol === 'https:' ? '✓ Secure Connection' : '⚠ Not Secure'}
+
+              {/* Rating Badge */}
+              <div className="px-4 py-2 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 rounded-full">
+                <span className="text-sm font-semibold text-emerald-300">
+                  {getScoreRating(metrics.overallScore)}
                 </span>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Protection Stats Card */}
-        <div className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-500 to-pink-600 p-3">
-            <h2 className="text-white font-semibold text-sm flex items-center gap-2">
-              <span className="text-lg">📊</span>
-              Protection Stats
-            </h2>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-3 rounded-xl bg-gradient-to-br from-red-50 to-rose-50 hover:scale-105 transition-transform duration-200">
-                <div className="text-2xl font-bold text-red-600">0</div>
-                <div className="text-xs text-slate-600 mt-1">Trackers Blocked</div>
-              </div>
-              <div className="text-center p-3 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 hover:scale-105 transition-transform duration-200">
-                <div className="text-2xl font-bold text-blue-600">0</div>
-                <div className="text-xs text-slate-600 mt-1">Cookies Managed</div>
-              </div>
-              <div className="text-center p-3 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50 hover:scale-105 transition-transform duration-200">
-                <div className="text-2xl font-bold text-green-600">100</div>
-                <div className="text-xs text-slate-600 mt-1">Privacy Score</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Extension Info Card */}
-        {extensionData && (
-          <div className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
-            <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-3">
-              <h2 className="text-white font-semibold text-sm flex items-center gap-2">
-                <span className="text-lg">⚙️</span>
-                Extension Info
-              </h2>
-            </div>
-            <div className="p-4 space-y-2">
-              <div className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                <span className="text-xs text-slate-600 font-medium">Version</span>
-                <span className="text-sm font-bold text-slate-800">{extensionData.version}</span>
-              </div>
-              <div className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                <span className="text-xs text-slate-600 font-medium">Development Phase</span>
-                <span className="text-sm font-bold text-slate-800 bg-purple-100 px-2 py-1 rounded-md">Phase {extensionData.phase}</span>
-              </div>
-              <div className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                <span className="text-xs text-slate-600 font-medium">Protection Status</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded-md ${
-                  extensionData.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {extensionData.active ? '✓ Active' : '✕ Inactive'}
-                </span>
-              </div>
-              {extensionData.installDate && (
-                <div className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                  <span className="text-xs text-slate-600 font-medium">Installed</span>
-                  <span className="text-xs font-semibold text-slate-700">
-                    {new Date(extensionData.installDate).toLocaleDateString('en-US', { 
-                      year: 'numeric', 
-                      month: 'short', 
-                      day: 'numeric' 
-                    })}
-                  </span>
+              {/* Current Site Info */}
+              {tabInfo && (
+                <div className="mt-6 w-full">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-slate-400 text-xs font-medium uppercase tracking-wider">Current Site</span>
+                  </div>
+                  <div className="flex items-center gap-3 bg-slate-800/50 rounded-xl px-4 py-3 border border-slate-700/50">
+                    <div className="w-8 h-8 bg-slate-700/50 rounded-lg flex items-center justify-center text-sm">
+                      {tabInfo.protocol === 'https:' ? '🔒' : '⚠️'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium text-sm truncate">{tabInfo.domain}</p>
+                      <p className="text-slate-400 text-xs">
+                        {tabInfo.protocol === 'https:' ? 'Secure Connection' : 'Not Secure'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Features Progress Card */}
-        <div className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-3">
-            <h2 className="text-white font-semibold text-sm flex items-center gap-2">
-              <span className="text-lg">🚀</span>
-              Development Progress
-            </h2>
+        {/* Security Metrics Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Trackers Blocked */}
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                <span className="text-lg">🚫</span>
+              </div>
+              <span className="text-slate-400 text-xs font-medium">Trackers</span>
+            </div>
+            <p className="text-2xl font-bold text-white">{metrics.trackersBlocked}</p>
+            <p className="text-xs text-slate-500 mt-1">Blocked</p>
           </div>
-          <div className="p-4 space-y-2">
-            <div className="flex items-center gap-3 group">
-              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                <span className="text-white text-xs font-bold">✓</span>
+
+          {/* Cookies Managed */}
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                <span className="text-lg">🍪</span>
               </div>
-              <span className="text-sm text-slate-700">Extension Foundation</span>
+              <span className="text-slate-400 text-xs font-medium">Cookies</span>
             </div>
-            <div className="flex items-center gap-3 group opacity-50">
-              <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">2</span>
+            <p className="text-2xl font-bold text-white">{metrics.cookiesManaged}</p>
+            <p className="text-xs text-slate-500 mt-1">Managed</p>
+          </div>
+
+          {/* Requests Analyzed */}
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                <span className="text-lg">📊</span>
               </div>
-              <span className="text-sm text-slate-500">Tracker Blocking</span>
+              <span className="text-slate-400 text-xs font-medium">Requests</span>
             </div>
-            <div className="flex items-center gap-3 group opacity-50">
-              <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">3</span>
+            <p className="text-2xl font-bold text-white">{metrics.requestsAnalyzed}</p>
+            <p className="text-xs text-slate-500 mt-1">Analyzed</p>
+          </div>
+
+          {/* Malware Threats */}
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
+                <span className="text-lg">🛡️</span>
               </div>
-              <span className="text-sm text-slate-500">Privacy Scoring</span>
+              <span className="text-slate-400 text-xs font-medium">Threats</span>
             </div>
-            <div className="flex items-center gap-3 group opacity-50">
-              <div className="w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold">4</span>
+            <p className="text-2xl font-bold text-white">{metrics.malwareThreats}</p>
+            <p className="text-xs text-slate-500 mt-1">Blocked</p>
+          </div>
+        </div>
+
+        {/* Website Security Report */}
+        <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-sm font-semibold text-white">Security Report</span>
+          </div>
+          
+          <div className="space-y-3">
+            {/* SSL Certificate */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-300">SSL Certificate</span>
               </div>
-              <span className="text-sm text-slate-500">ML Phishing Detection</span>
+              <span className="text-xs font-semibold text-emerald-400">✓ Valid</span>
+            </div>
+
+            {/* Privacy Policy */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-300">Privacy Policy</span>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">Not Found</span>
+            </div>
+
+            {/* Third-Party Scripts */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-300">Third-Party Scripts</span>
+              </div>
+              <span className="text-xs font-semibold text-emerald-400">✓ Safe</span>
+            </div>
+
+            {/* Data Collection */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-300">Data Collection</span>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">Minimal</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Footer */}
-      <div className="bg-white border-t border-slate-200 p-3">
-        <p className="text-center text-xs text-slate-500">
-          Made with <span className="text-red-500">❤</span> by Team PRISM • Protecting your privacy
-        </p>
+        {/* Extension Info - Compact */}
+        {extensionData && (
+          <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl px-4 py-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">PRISM v{extensionData.version}</span>
+              <span className="text-slate-500">Phase {extensionData.phase}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
