@@ -5,11 +5,15 @@
  */
 
 import { StatsManager } from '../utils/stats-manager';
+import { HistoryTracker } from '../utils/history-tracker';
+import { TrustManager } from '../utils/trust-manager';
 import { isTrackerDomain, getTrackerCategory } from '../utils/enhanced-tracker-database';
 
 console.log('🛡️ PRISM Service Worker Loaded - Phase 3');
 
 const stats = StatsManager.getInstance();
+const history = HistoryTracker.getInstance();
+const trust = TrustManager.getInstance();
 
 // Track fingerprint attempts per domain
 const fingerprintAttempts = new Map<string, Map<string, number>>();
@@ -23,6 +27,28 @@ const tabThirdPartyDomains = new Map<number, Set<string>>();
 const cookieCheckInterval = 2000; // Check cookies every 2 seconds
 let currentTabId: number | null = null;
 let currentDomain: string | null = null;
+
+// Settings cache for synchronous access
+let extensionEnabled = true;
+let blockingEnabled = true;
+
+// Load settings on startup
+chrome.storage.local.get(['extensionEnabled', 'blockingEnabled'], (result) => {
+  extensionEnabled = result.extensionEnabled !== false;
+  blockingEnabled = result.blockingEnabled !== false;
+});
+
+// Listen for settings changes
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local') {
+    if (changes.extensionEnabled) {
+      extensionEnabled = changes.extensionEnabled.newValue !== false;
+    }
+    if (changes.blockingEnabled) {
+      blockingEnabled = changes.blockingEnabled.newValue !== false;
+    }
+  }
+});
 
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(() => {
@@ -52,16 +78,9 @@ chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     const { url, tabId, type } = details;
     
-    // Analyze all requests
-    if (tabId > 0) {
-      chrome.tabs.get(tabId, (tab) => {
-        if (tab?.url) {
-          try {
-            const domain = new URL(tab.url).hostname;
-            stats.incrementRequestAnalyzed(domain);
-          } catch (e) {}
-        }
-      });
+    // Check if blocking is enabled (use cached settings for synchronous access)
+    if (!blockingEnabled || !extensionEnabled) {
+      return { cancel: false }; // Don't block if disabled
     }
     
     // Check if URL is a tracker
@@ -81,6 +100,9 @@ chrome.webRequest.onBeforeRequest.addListener(
             try {
               const domain = new URL(tab.url).hostname;
               stats.incrementTrackerBlocked(domain);
+              
+              // Record tracker block in history
+              history.recordTrackerBlock();
               
               // Notify popup of update
               chrome.runtime.sendMessage({
@@ -175,6 +197,20 @@ function updateCookieCount() {
 
 // Start cookie monitoring interval
 setInterval(updateCookieCount, cookieCheckInterval);
+
+// Record daily average score
+let lastScoreRecordDate = new Date().toDateString();
+setInterval(() => {
+  const today = new Date().toDateString();
+  if (today !== lastScoreRecordDate) {
+    // New day - record yesterday's average score
+    const avgScore = stats.getAveragePrivacyScore();
+    if (avgScore > 0) {
+      history.recordDailyScore(avgScore);
+    }
+    lastScoreRecordDate = today;
+  }
+}, 3600000); // Check every hour
 
 // Track active tab changes
 chrome.tabs.onActivated.addListener((activeInfo) => {
@@ -292,6 +328,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ status: 'OK' });
       break;
 
+    case 'PRIVACY_POLICY_DETECTED':
+      // Track privacy policy detection
+      const { domain: ppDomain, found } = message;
+      stats.updatePrivacyPolicy(ppDomain, found);
+      console.log(`🔍 Privacy policy ${found ? 'found' : 'not found'} on ${ppDomain}`);
+      sendResponse({ status: 'OK' });
+      break;
+
     case 'GET_SITE_STATS':
       const { domain: siteDomain } = message;
       
@@ -384,6 +428,92 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({
         status: 'OK',
         data: stats.getGlobalStats()
+      });
+      break;
+
+    case 'GET_ALL_SITE_STATS':
+      sendResponse({
+        status: 'OK',
+        data: stats.getAllSiteStats()
+      });
+      break;
+
+    case 'GET_TOP_BLOCKED_DOMAINS':
+      sendResponse({
+        status: 'OK',
+        data: stats.getTopBlockedDomains(message.limit || 5)
+      });
+      break;
+
+    case 'GET_AVERAGE_SCORE':
+      sendResponse({
+        status: 'OK',
+        data: stats.getAveragePrivacyScore()
+      });
+      break;
+
+    case 'GET_SCORE_HISTORY':
+      history.getScoreHistory().then(data => {
+        sendResponse({
+          status: 'OK',
+          data
+        });
+      });
+      return true; // Async response
+
+    case 'GET_TRACKER_TIMELINE':
+      history.getTrackerTimeline().then(data => {
+        sendResponse({
+          status: 'OK',
+          data
+        });
+      });
+      return true; // Async response
+
+    case 'RECORD_DAILY_SCORE':
+      history.recordDailyScore(message.score).then(() => {
+        sendResponse({ status: 'OK' });
+      });
+      return true; // Async response
+
+    case 'GET_TRUST_LEVEL':
+      sendResponse({
+        status: 'OK',
+        data: trust.getTrustLevel(message.domain)
+      });
+      break;
+
+    case 'ADD_TRUSTED_SITE':
+      trust.addTrustedSite(message.domain, message.reason);
+      sendResponse({ status: 'OK' });
+      break;
+
+    case 'ADD_BLOCKED_SITE':
+      trust.addBlockedSite(message.domain, message.reason);
+      sendResponse({ status: 'OK' });
+      break;
+
+    case 'REMOVE_TRUSTED_SITE':
+      trust.removeTrustedSite(message.domain);
+      sendResponse({ status: 'OK' });
+      break;
+
+    case 'REMOVE_BLOCKED_SITE':
+      trust.removeBlockedSite(message.domain);
+      sendResponse({ status: 'OK' });
+      break;
+
+    case 'GET_ALL_TRUSTED_SITES':
+      sendResponse({
+        status: 'OK',
+        data: trust.getAllTrustedSites()
+      });
+      break;
+
+    case 'GET_ALL_BLOCKED_SITES':
+      sendResponse({
+        status: 'OK',
+        data: trust.getAllBlockedSites()
       });
       break;
 

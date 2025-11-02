@@ -199,6 +199,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// Detect privacy policy on page
+function detectPrivacyPolicy(): boolean {
+  const privacyKeywords = [
+    'privacy policy',
+    'privacy-policy',
+    'privacy_policy',
+    'privacypolicy',
+    'datenschutz',
+    'politique de confidentialité'
+  ];
+  
+  // Check for links containing privacy keywords
+  const links = Array.from(document.querySelectorAll('a'));
+  for (const link of links) {
+    const href = link.getAttribute('href')?.toLowerCase() || '';
+    const text = link.textContent?.toLowerCase() || '';
+    
+    for (const keyword of privacyKeywords) {
+      if (href.includes(keyword) || text.includes(keyword)) {
+        return true;
+      }
+    }
+  }
+  
+  // Check meta tags
+  const metaTags = Array.from(document.querySelectorAll('meta'));
+  for (const meta of metaTags) {
+    const content = meta.getAttribute('content')?.toLowerCase() || '';
+    for (const keyword of privacyKeywords) {
+      if (content.includes(keyword)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+// Send privacy policy detection to background
+window.addEventListener('load', () => {
+  const domain = window.location.hostname;
+  const hasPrivacyPolicy = detectPrivacyPolicy();
+  
+  chrome.runtime.sendMessage({
+    type: 'PRIVACY_POLICY_DETECTED',
+    domain,
+    found: hasPrivacyPolicy
+  }).catch(() => {});
+  
+  console.log(`🔍 Privacy policy ${hasPrivacyPolicy ? 'found' : 'not found'} on ${domain}`);
+});
+
 // Log successful injection
 console.log('✅ PRISM Content Script Ready - Phase 3');
 console.log('🛡️ Fingerprint protection active');

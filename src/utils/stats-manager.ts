@@ -14,6 +14,9 @@ export interface SiteStats {
   requestsAnalyzed: number;
   threatsDetected: number;
   fingerprintAttempts: number;
+  thirdPartyScripts: number;
+  mixedContent: boolean;
+  privacyPolicyFound: boolean;
   timestamp: number;
   securityScore: number;
   protocol: string;
@@ -132,6 +135,9 @@ export class StatsManager {
         requestsAnalyzed: 0,
         threatsDetected: 0,
         fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
         timestamp: Date.now(),
         securityScore: 100,
         protocol: 'https:',
@@ -163,12 +169,17 @@ export class StatsManager {
         requestsAnalyzed: 0,
         threatsDetected: 0,
         fingerprintAttempts: 0,
+        thirdPartyScripts: count,
+        mixedContent: false,
+        privacyPolicyFound: false,
         timestamp: Date.now(),
         securityScore: 100,
         protocol: 'https:',
         hasSSL: true
       };
       this.globalStats.sitesVisited++;
+    } else {
+      stats.thirdPartyScripts = count;
     }
     
     stats.timestamp = Date.now();
@@ -191,12 +202,50 @@ export class StatsManager {
         requestsAnalyzed: 0,
         threatsDetected: 0,
         fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: hasMixedContent,
+        privacyPolicyFound: false,
         timestamp: Date.now(),
         securityScore: 100,
         protocol: 'https:',
         hasSSL: true
       };
       this.globalStats.sitesVisited++;
+    } else {
+      stats.mixedContent = hasMixedContent;
+    }
+    
+    stats.timestamp = Date.now();
+    stats.securityScore = this.calculateEnhancedSecurityScore(stats);
+    
+    this.currentSiteStats.set(domain, stats);
+    this.globalStats.lastUpdated = Date.now();
+    this.saveStats();
+  }
+
+  updatePrivacyPolicy(domain: string, found: boolean): void {
+    let stats = this.currentSiteStats.get(domain);
+    
+    if (!stats) {
+      stats = {
+        url: '',
+        domain,
+        trackersBlocked: 0,
+        cookiesBlocked: 0,
+        requestsAnalyzed: 0,
+        threatsDetected: 0,
+        fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: found,
+        timestamp: Date.now(),
+        securityScore: 100,
+        protocol: 'https:',
+        hasSSL: true
+      };
+      this.globalStats.sitesVisited++;
+    } else {
+      stats.privacyPolicyFound = found;
     }
     
     stats.timestamp = Date.now();
@@ -219,6 +268,9 @@ export class StatsManager {
         requestsAnalyzed: 0,
         threatsDetected: 0,
         fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
         timestamp: Date.now(),
         securityScore: 100,
         protocol: 'https:',
@@ -245,9 +297,9 @@ export class StatsManager {
       fingerprintAttempts: stats.fingerprintAttempts,
       threatsDetected: stats.threatsDetected,
       sslCertificate: stats.hasSSL,
-      privacyPolicyFound: false, // Will be detected in future
-      thirdPartyScripts: Math.floor(stats.requestsAnalyzed / 5), // Estimate
-      mixedContent: false,
+      privacyPolicyFound: stats.privacyPolicyFound,  // Real data
+      thirdPartyScripts: stats.thirdPartyScripts,     // Real data
+      mixedContent: stats.mixedContent,               // Real data
       httpOnly: stats.protocol === 'http:'
     };
 
@@ -266,6 +318,9 @@ export class StatsManager {
         requestsAnalyzed: 0,
         threatsDetected: 0,
         fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
         timestamp: Date.now(),
         securityScore: 100,
         protocol,
@@ -306,5 +361,32 @@ export class StatsManager {
     };
     this.currentSiteStats.clear();
     this.saveStats();
+  }
+
+  getAllSiteStats(): SiteStats[] {
+    return Array.from(this.currentSiteStats.values());
+  }
+
+  getTopBlockedDomains(limit: number = 5): Array<{ domain: string; count: number }> {
+    const siteStats = Array.from(this.currentSiteStats.values());
+    
+    // Sort by trackers blocked (descending)
+    const sorted = siteStats
+      .filter(stats => stats.trackersBlocked > 0)
+      .sort((a, b) => b.trackersBlocked - a.trackersBlocked)
+      .slice(0, limit)
+      .map(stats => ({
+        domain: stats.domain,
+        count: stats.trackersBlocked
+      }));
+
+    return sorted;
+  }
+
+  getAveragePrivacyScore(): number {
+    const scores = Array.from(this.currentSiteStats.values()).map(s => s.securityScore);
+    if (scores.length === 0) return 0;
+    const sum = scores.reduce((acc, score) => acc + score, 0);
+    return Math.round(sum / scores.length);
   }
 }
