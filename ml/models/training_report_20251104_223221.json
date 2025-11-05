@@ -1,0 +1,164 @@
+{
+  "timestamp": "2025-11-04T22:32:21.763047",
+  "model_type": "ensemble",
+  "configuration": {
+    "paths": {
+      "project_root": "C:\\Users\\msi\\Downloads\\PRISM\\ml",
+      "data_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\data",
+      "models_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\models",
+      "logs_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\logs"
+    },
+    "model": {
+      "model_type": "ensemble",
+      "n_estimators": 100,
+      "max_depth": 20,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "class_weight": "balanced",
+      "random_state": 42,
+      "test_size": 0.2,
+      "validation_size": 0.1,
+      "n_jobs": -1
+    },
+    "features": {
+      "max_url_length": 200,
+      "min_domain_length": 3,
+      "extract_whois": false,
+      "use_cache": true,
+      "batch_size": 1000
+    },
+    "logging": {
+      "log_level": "INFO",
+      "log_format": "detailed"
+    },
+    "export": {
+      "export_tfjs": true,
+      "api_enabled": false,
+      "api_host": "localhost",
+      "api_port": 5000
+    }
+  },
+  "train_metrics": {
+    "train_accuracy": 1.0,
+    "model_type": "ensemble",
+    "n_samples": 1356,
+    "n_features": 28
+  },
+  "test_metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "auc_roc": 1.0,
+    "confusion_matrix": [
+      [
+        170,
+        0
+      ],
+      [
+        0,
+        170
+      ]
+    ],
+    "true_negatives": 170,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "true_positives": 170,
+    "classification_report": {
+      "Legitimate": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 170.0
+      },
+      "Phishing": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 170.0
+      },
+      "accuracy": 1.0,
+      "macro avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 340.0
+      },
+      "weighted avg": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 340.0
+      }
+    }
+  },
+  "feature_importance": {
+    "has_https": 0.20099807014597046,
+    "num_hyphens": 0.18398992083528312,
+    "domain_entropy": 0.09793446572125515,
+    "num_sensitive_words": 0.08118234646223818,
+    "domain_length": 0.061312321125984046,
+    "num_dots": 0.046962858587196794,
+    "tld_length": 0.042068065816528964,
+    "special_char_ratio": 0.04000264320669664,
+    "has_www": 0.03932168333540472,
+    "domain_has_digits": 0.03438736482934026,
+    "num_digits": 0.032128853105602206,
+    "digit_ratio": 0.02950828411036338,
+    "vowel_ratio": 0.02311248808891743,
+    "path_length": 0.01827166812246536,
+    "has_ip_address": 0.012238928567031201,
+    "num_slashes": 0.010150736094270212,
+    "path_entropy": 0.009691953498783875,
+    "is_suspicious_tld": 0.009397864063786685,
+    "url_entropy": 0.007628899878928141,
+    "url_length": 0.006784756751435887
+  },
+  "model_info": {
+    "model_type": "ensemble",
+    "is_trained": true,
+    "n_features": 28,
+    "feature_names": [
+      "url_length",
+      "domain_length",
+      "path_length",
+      "has_https",
+      "has_ip_address",
+      "num_dots",
+      "num_hyphens",
+      "num_underscores",
+      "num_slashes",
+      "num_digits",
+      "num_subdomains",
+      "tld_length",
+      "is_suspicious_tld",
+      "has_www",
+      "domain_has_digits",
+      "subdomain_count",
+      "num_query_params",
+      "query_length",
+      "has_at_symbol",
+      "has_double_slash_redirect",
+      "num_sensitive_words",
+      "num_external_links",
+      "url_entropy",
+      "domain_entropy",
+      "path_entropy",
+      "special_char_ratio",
+      "digit_ratio",
+      "vowel_ratio"
+    ],
+    "config": {
+      "model_type": "ensemble",
+      "n_estimators": 100,
+      "max_depth": 20,
+      "min_samples_split": 5,
+      "min_samples_leaf": 2,
+      "class_weight": "balanced",
+      "random_state": 42,
+      "test_size": 0.2,
+      "validation_size": 0.1,
+      "n_jobs": -1
+    }
+  }
+}
