@@ -9,46 +9,48 @@
 
 **Purpose:** Shows PRISM system as a single process with external entities and data flows.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL ENTITIES                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│              │         │              │         │              │
-│   Web User   │         │   Websites   │         │   External   │
-│              │         │   (Target)   │         │   Threat DBs │
-│              │         │              │         │              │
-└──────┬───────┘         └──────┬───────┘         └──────┬───────┘
-       │                        │                        │
-       │ 1. Browse Request      │ 5. Web Content        │ 8. Threat Data
-       │ 2. Settings Config     │ 6. Tracking Scripts   │ 9. Safe Browsing API
-       │ 3. Report Threats      │ 7. Cookies            │ 10. PhishTank Data
-       │                        │                        │
-       ▼                        ▼                        ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                                                             │
-│                        ┌─────────────────────┐                             │
-│                        │                     │                             │
-│                        │   PRISM EXTENSION   │                             │
-│                        │   SYSTEM            │                             │
-│                        │   (Process 0)       │                             │
-│                        │                     │                             │
-│                        └─────────────────────┘                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-       │                        │                        │
-       │ 11. Privacy Alerts     │ 15. Blocked Requests  │ 17. Threat Reports
-       │ 12. Privacy Score      │ 16. Modified Content  │ 18. Sync Data
-       │ 13. Analytics Reports  │                        │
-       │ 14. Educational Tips   │                        │
-       ▼                        ▼                        ▼
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│              │         │              │         │              │
-│   Web User   │         │   Websites   │         │   Backend    │
-│              │         │   (Target)   │         │   Server     │
-│              │         │              │         │              │
-└──────────────┘         └──────────────┘         └──────────────┘
+```mermaid
+graph TB
+    %% External Entities
+    User[("👤 Web User")]
+    Websites[("🌐 Websites<br/>(Target Pages)")]
+    ThreatDB[("🛡️ External<br/>Threat DBs")]
+    Backend[("☁️ Backend<br/>Server")]
+    
+    %% Main System Process
+    PRISM["⬢ PRISM EXTENSION<br/>SYSTEM<br/>(Process 0)<br/>━━━━━━━━━━━━━━<br/>• Tracker Blocking<br/>• ML Threat Detection<br/>• Privacy Scoring<br/>• Fingerprint Protection"]
+    
+    %% Input Flows to PRISM
+    User -->|"1️⃣ Browse Request<br/>(URL, Headers, Prefs)"| PRISM
+    User -->|"2️⃣ Settings Config<br/>(Privacy Level, Rules)"| PRISM
+    User -->|"3️⃣ Report Threats<br/>(URL, Description)"| PRISM
+    
+    Websites -->|"5️⃣ Web Content<br/>(HTML, CSS, JS)"| PRISM
+    Websites -->|"6️⃣ Tracking Scripts<br/>(Analytics, Ads)"| PRISM
+    Websites -->|"7️⃣ Cookies<br/>(Session, Tracking)"| PRISM
+    
+    ThreatDB -->|"8️⃣ Threat Data<br/>(Malicious URLs)"| PRISM
+    ThreatDB -->|"9️⃣ Safe Browsing API<br/>(Risk Scores)"| PRISM
+    ThreatDB -->|"🔟 PhishTank Data<br/>(Phishing URLs)"| PRISM
+    
+    %% Output Flows from PRISM
+    PRISM -->|"1️⃣1️⃣ Privacy Alerts<br/>(Warnings, Tips)"| User
+    PRISM -->|"1️⃣2️⃣ Privacy Score<br/>(0-100, Risk Level)"| User
+    PRISM -->|"1️⃣3️⃣ Analytics Reports<br/>(Trackers, Timeline)"| User
+    PRISM -->|"1️⃣4️⃣ Educational Tips<br/>(Best Practices)"| User
+    
+    PRISM -->|"1️⃣5️⃣ Blocked Requests<br/>(Tracker Domains)"| Websites
+    PRISM -->|"1️⃣6️⃣ Modified Content<br/>(Warnings, Fake Data)"| Websites
+    
+    PRISM -->|"1️⃣7️⃣ Threat Reports<br/>(Detected Threats)"| Backend
+    PRISM -->|"1️⃣8️⃣ Sync Data<br/>(Settings, History)"| Backend
+    
+    %% Styling
+    classDef entityStyle fill:#4f46e5,stroke:#312e81,stroke-width:3px,color:#fff
+    classDef processStyle fill:#059669,stroke:#065f46,stroke-width:4px,color:#fff,font-weight:bold
+    
+    class User,Websites,ThreatDB,Backend entityStyle
+    class PRISM processStyle
 ```
 
 ### Data Flow Descriptions (Level 0)
@@ -79,137 +81,90 @@
 
 **Purpose:** Breaks down PRISM system into major subsystems and their interactions.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PRISM EXTENSION SYSTEM (Level 1)                    │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-                         ┌──────────────────────────┐
-                         │   WEB USER               │
-                         └────┬─────────────┬───────┘
-                              │             │
-                    1.1 Settings│             │1.2 Browse
-                    Commands    │             │Request
-                              │             │
-                              ▼             ▼
-        ┌─────────────────────────────────────────────────────────────┐
-        │                                                             │
-        │  ┌──────────────────────────────────────────────────┐     │
-        │  │  PROCESS 1: USER INTERFACE (Popup UI)            │     │
-        │  │  - Display privacy metrics                       │     │
-        │  │  - Show settings controls                        │     │
-        │  │  - Analytics dashboard                           │     │
-        │  └────┬────────────────────────────┬────────────────┘     │
-        │       │ 1.3 User Config            │ 1.4 Request         │
-        │       │                            │ Metrics Display     │
-        │       ▼                            ▼                      │
-        │  ┌──────────────────┐         ┌──────────────────┐      │
-        │  │   D1: USER       │         │   D2: STATISTICS │      │
-        │  │   SETTINGS       │         │   STORE          │      │
-        │  │   STORAGE        │         │   (Real-time)    │      │
-        │  └──────────────────┘         └──────────────────┘      │
-        │       │                            ▲                      │
-        │       │ 1.5 Settings               │ 1.8 Stats           │
-        │       │ Data                       │ Updates             │
-        │       ▼                            │                      │
-        │  ┌──────────────────────────────────────────────────┐   │
-        │  │  PROCESS 2: BACKGROUND SERVICE WORKER            │   │
-        │  │  - Request interception                          │   │
-        │  │  - Tracker blocking logic                        │   │
-        │  │  - ML inference engine                           │   │
-        │  │  - Statistics aggregation                        │   │
-        │  └────┬─────────┬──────────┬────────────┬──────────┘   │
-        │       │         │          │            │              │
-        │       │2.1 URL  │2.2 Block │2.3 Analyze │2.4 Update   │
-        │       │Check    │Request   │Features    │Stats        │
-        │       │         │          │            │              │
-        │       ▼         ▼          ▼            │              │
-        │  ┌─────────┐ ┌─────────┐ ┌──────────┐  │              │
-        │  │   D3:   │ │   D4:   │ │   D5:    │  │              │
-        │  │ TRACKER │ │ BLOCK   │ │  ML      │  │              │
-        │  │DATABASE │ │  LIST   │ │ MODEL    │  │              │
-        │  │(200+)   │ │(Cache)  │ │(TF.js)   │  │              │
-        │  └─────────┘ └─────────┘ └──────────┘  │              │
-        │       ▲         │          │            │              │
-        │       │         │          │            ▼              │
-        │       │         │          │       ┌──────────────┐   │
-        │       │         │          │       │   D2: STATS  │   │
-        │       │         │          │       │   STORE      │   │
-        │       │         │          │       └──────────────┘   │
-        │       │         │          │            │              │
-        │       │         ▼          ▼            │              │
-        │  ┌──────────────────────────────────────────────────┐ │
-        │  │  PROCESS 3: PRIVACY GUARDIAN                     │ │
-        │  │  - Request filtering                             │ │
-        │  │  - Cookie analysis                               │ │
-        │  │  - Fingerprint blocking                          │ │
-        │  │  - Privacy scoring                               │ │
-        │  └────┬──────────────┬──────────────┬───────────────┘ │
-        │       │              │              │                  │
-        │       │3.1 Block     │3.2 Modify    │3.3 Privacy      │
-        │       │Command       │Request       │Score            │
-        │       │              │              │                  │
-        │       ▼              ▼              ▼                  │
-        │  ┌─────────────────────────────────────────────────┐  │
-        │  │  PROCESS 4: CONTENT SCRIPT INJECTOR             │  │
-        │  │  - DOM manipulation                             │  │
-        │  │  - Warning overlay injection                    │  │
-        │  │  - Fake data generation                         │  │
-        │  │  - Form detection                               │  │
-        │  └────┬──────────────┬──────────────┬──────────────┘  │
-        │       │              │              │                  │
-        │       │4.1 Inject    │4.2 Block     │4.3 Form Data    │
-        │       │Warning       │Script        │                 │
-        │       │              │              │                  │
-        └───────┼──────────────┼──────────────┼──────────────────┘
-                │              │              │
-                ▼              ▼              ▼
-        ┌──────────────────────────────────────────────────┐
-        │           WEBSITES (Target Pages)                │
-        └────┬────────────────────────────┬────────────────┘
-             │                            │
-             │5.1 Content                 │5.2 Tracking
-             │Delivery                    │Scripts
-             │                            │
-             ▼                            ▼
-        ┌─────────────────────────────────────────────────┐
-        │  PROCESS 5: ML THREAT DETECTOR                  │
-        │  - URL feature extraction (28 features)         │
-        │  - ML model inference                           │
-        │  - Confidence scoring                           │
-        │  - Threat classification                        │
-        └────┬─────────────────────┬──────────────────────┘
-             │                     │
-             │5.3 Threat           │5.4 Training
-             │Classification       │Data
-             │                     │
-             ▼                     ▼
-        ┌──────────────┐      ┌──────────────┐
-        │   D6: THREAT │      │   D7: ML     │
-        │   HISTORY    │      │   TRAINING   │
-        │   (7-day)    │      │   DATA       │
-        └──────────────┘      └──────────────┘
-             │                     │
-             │5.5 Historical       │5.6 Model
-             │Data                 │Updates
-             │                     │
-             ▼                     ▼
-        ┌─────────────────────────────────────────────────┐
-        │  PROCESS 6: BACKEND SYNC SERVICE                │
-        │  - Cloud synchronization                        │
-        │  - User reports aggregation                     │
-        │  - Threat intelligence updates                  │
-        └────┬─────────────────────┬──────────────────────┘
-             │                     │
-             │6.1 Sync             │6.2 Threat
-             │Settings             │Intelligence
-             │                     │
-             ▼                     ▼
-        ┌──────────────┐      ┌──────────────┐
-        │  BACKEND     │      │  EXTERNAL    │
-        │  SERVER      │      │  THREAT APIs │
-        │  (MongoDB)   │      │  (PhishTank) │
-        └──────────────┘      └──────────────┘
+```mermaid
+graph TB
+    %% External Entities
+    User[("👤 WEB USER")]
+    Websites[("🌐 WEBSITES")]
+    ThreatAPIs[("🛡️ EXTERNAL<br/>THREAT APIs")]
+    BackendServer[("☁️ BACKEND<br/>SERVER")]
+    
+    %% Data Stores
+    D1[("💾 D1: USER<br/>SETTINGS<br/>10-50 KB")]
+    D2[("📊 D2: STATISTICS<br/>STORE<br/>100-500 KB")]
+    D3[("🗂️ D3: TRACKER<br/>DATABASE<br/>200+ domains")]
+    D4[("⚡ D4: BLOCK LIST<br/>CACHE<br/>20-50 KB")]
+    D5[("🧠 D5: ML MODEL<br/>TensorFlow.js<br/>214 KB")]
+    D6[("📜 D6: THREAT<br/>HISTORY<br/>500KB-2MB")]
+    D7[("🎓 D7: TRAINING<br/>DATA<br/>100KB-10MB")]
+    
+    %% Main Processes
+    P1["📱 PROCESS 1:<br/>USER INTERFACE<br/>━━━━━━━━━━━━<br/>• Popup UI<br/>• Settings Panel<br/>• Analytics Dashboard<br/>• Report Export"]
+    
+    P2["⚙️ PROCESS 2:<br/>BACKGROUND<br/>SERVICE WORKER<br/>━━━━━━━━━━━━<br/>• Request Interception<br/>• Tracker Blocking<br/>• ML Inference<br/>• Stats Aggregation"]
+    
+    P3["🛡️ PROCESS 3:<br/>PRIVACY<br/>GUARDIAN<br/>━━━━━━━━━━━━<br/>• Request Filtering<br/>• Cookie Analysis<br/>• Fingerprint Blocking<br/>• Privacy Scoring"]
+    
+    P4["🔧 PROCESS 4:<br/>CONTENT SCRIPT<br/>INJECTOR<br/>━━━━━━━━━━━━<br/>• DOM Manipulation<br/>• Warning Overlay<br/>• Fake Data Gen<br/>• Form Detection"]
+    
+    P5["🤖 PROCESS 5:<br/>ML THREAT<br/>DETECTOR<br/>━━━━━━━━━━━━<br/>• Feature Extraction<br/>• 28 Features<br/>• Inference Engine<br/>• Threat Classification"]
+    
+    P6["🔄 PROCESS 6:<br/>BACKEND SYNC<br/>SERVICE<br/>━━━━━━━━━━━━<br/>• Cloud Sync<br/>• Report Aggregation<br/>• Intelligence Updates"]
+    
+    %% User Interactions
+    User -->|"1.1 Settings Commands<br/>1.2 Browse Request"| P1
+    P1 -->|"11-14 Alerts, Score,<br/>Reports, Tips"| User
+    
+    %% Process 1 - UI
+    P1 <-->|"1.3 User Config"| D1
+    P1 <-->|"1.4 Display Metrics"| D2
+    
+    %% Process 2 - Background Worker
+    D1 -->|"1.5 Settings Data"| P2
+    P2 -->|"1.8 Stats Updates"| D2
+    P2 <-->|"2.1 URL Check"| D3
+    P2 <-->|"2.2 Block Request"| D4
+    P2 <-->|"2.3 Analyze Features"| D5
+    P2 -->|"2.4 Update Stats"| D2
+    
+    %% Process 3 - Privacy Guardian
+    D3 -->|"Pattern Matching"| P3
+    D4 -->|"Blocked Domains"| P3
+    P3 -->|"Privacy Score"| D2
+    
+    %% Process 3 to Process 4
+    P3 -->|"3.1 Block Command<br/>3.2 Modify Request<br/>3.3 Privacy Score"| P4
+    
+    %% Process 4 - Content Scripts
+    P4 <-->|"4.1 Warning Inject<br/>4.2 Block Script<br/>4.3 Form Data"| Websites
+    Websites -->|"5.1 Content Delivery<br/>5.2 Tracking Scripts"| P4
+    
+    %% Process 5 - ML Detector
+    P2 -->|"URL for Analysis"| P5
+    D5 -->|"Model Weights"| P5
+    P5 -->|"5.3 Threat Classification"| D6
+    P5 -->|"5.4 Training Samples"| D7
+    D6 -->|"5.5 Historical Data"| P5
+    D7 -->|"5.6 Model Updates"| P5
+    
+    %% Process 6 - Backend Sync
+    P2 -->|"Sync Request"| P6
+    D1 -->|"Settings Backup"| P6
+    D6 -->|"Threat Reports"| P6
+    P6 <-->|"6.1 Settings Sync"| BackendServer
+    P6 <-->|"6.2 Threat Intelligence"| ThreatAPIs
+    
+    %% External APIs to System
+    ThreatAPIs -->|"8-10 Threat Data,<br/>Safe Browsing,<br/>PhishTank"| P2
+    
+    %% Styling
+    classDef entityStyle fill:#4f46e5,stroke:#312e81,stroke-width:3px,color:#fff,font-weight:bold
+    classDef processStyle fill:#059669,stroke:#065f46,stroke-width:3px,color:#fff,font-weight:bold
+    classDef storeStyle fill:#f59e0b,stroke:#b45309,stroke-width:3px,color:#000,font-weight:bold
+    
+    class User,Websites,ThreatAPIs,BackendServer entityStyle
+    class P1,P2,P3,P4,P5,P6 processStyle
+    class D1,D2,D3,D4,D5,D6,D7 storeStyle
 ```
 
 ---
