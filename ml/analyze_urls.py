@@ -1,130 +1,141 @@
 """
-PRISM ML - Interactive URL Phishing Analyzer
----------------------------------------------
-A quick interactive script to analyze URLs using a trained phishing detection model.
-
-Usage:
-    python analyze_urls.py
+Interactive URL analyzer for PRISM phishing detector.
+Test custom URLs and see detailed analysis.
 """
 
-from src.models.phishing_detector import PhishingDetector
-from src.features.url_features import URLFeatureExtractor
+from phishing_detector import PhishingDetector, FeatureExtractor
+import sys
 
-
-def analyze_url(detector, extractor, url: str) -> None:
-    """Analyze a single URL and display detection results."""
-    print(f"\n{'=' * 70}")
-    print(f"🔎 Analyzing URL: {url}")
-    print(f"{'=' * 70}")
-
-    # Extract features
-    features = extractor.extract(url)
-    if not features:
-        print("❌ Failed to extract features from this URL.")
-        return
-
-    # Prepare feature vector
-    X = [features.to_list()]
-
-    # Model predictions
-    prediction = detector.predict(X)[0]
-    probabilities = detector.predict_proba(X)[0]
-
-    # Display prediction results
-    if prediction == 1:
-        print(f"🚨 PHISHING DETECTED!")
-        print(f"   Confidence: {probabilities[1]:.2%}")
-    else:
-        print(f"✅ LEGITIMATE")
-        print(f"   Confidence: {probabilities[0]:.2%}")
-
-    # Display extracted feature summary
-    print("\n📊 Extracted Features:")
-    print(f"   URL Length:        {features.url_length}")
-    print(f"   Domain Length:     {features.domain_length}")
-    print(f"   HTTPS Present:     {'Yes' if features.has_https else 'No'}")
-    print(f"   Contains IP:       {'Yes' if features.has_ip_address else 'No'}")
-    print(f"   Suspicious TLD:    {'Yes' if features.is_suspicious_tld else 'No'}")
-    print(f"   URL Entropy:       {features.url_entropy:.4f}")
-    print(f"   Domain Entropy:    {features.domain_entropy:.4f}")
-    print(f"   Sensitive Words:   {features.num_sensitive_words}")
-    print(f"   Hyphens:           {features.num_hyphens}")
-    print(f"   Digits:            {features.num_digits}")
-    print(f"   Subdomains:        {features.num_subdomains}")
-
-
-def main():
-    """Main entry point for interactive URL analysis."""
-    print(f"\n{'=' * 70}")
-    print("🚀 PRISM ML - URL Phishing Analyzer")
-    print(f"{'=' * 70}")
-
-    print("\nLoading trained phishing detection model...")
-    detector = PhishingDetector.load("phishing_detector")
-    extractor = URLFeatureExtractor()
-    print("✅ Model successfully loaded.\n")
-
-    # Predefined test URLs organized by category
+def print_header():
     print("\n" + "=" * 70)
-    print("📋 Testing on Categorized URL Samples")
+    print("PRISM Phishing Detector - Interactive URL Analyzer")
     print("=" * 70 + "\n")
-    
-    test_categories = {
-        "✅ Legitimate URLs": [
-            "https://www.google.com",
-            "https://github.com/microsoft/vscode",
-            "https://www.wikipedia.org/wiki/Python",
-            "https://stackoverflow.com/questions/tagged/python",
-            "https://www.amazon.com/dp/B08N5WRWNW",
-        ],
-        "🚨 Subdomain Spoofing": [
-            "http://secure-paypal.malicious-site.tk/login",
-            "http://verify-amazon-account.fake.com",
-        ],
-        "🚨 Typosquatting": [
-            "http://g00gle.com/signin",
-            "http://faceb00k.com/secure-login",
-            "http://micros0ft-update.xyz/download",
-        ],
-        "🚨 IP-Based URLs": [
-            "http://192.168.1.1/admin/login",
-            "http://45.123.67.89/secure/verify",
-        ],
-        "🚨 Suspicious TLDs": [
-            "http://paypal-verify.tk/login",
-            "http://amaz0n-prime.ga/renew",
-        ],
-        "🚨 Brand Impersonation": [
-            "http://apple-security.verify-account.ml",
-            "http://secure-paypal.login-verify.tk",
-        ]
-    }
-    
-    for category, urls in test_categories.items():
-        print(f"\n{category}")
-        print("-" * 70)
-        for url in urls:
-            analyze_url(detector, extractor, url)
 
-    # Interactive input mode
-    print(f"\n{'=' * 70}")
-    print("🧭 Interactive Mode (type 'quit' to exit)")
-    print(f"{'=' * 70}")
+def print_result(url: str, result: dict, features: dict):
+    """Display detailed analysis results."""
+    
+    print(f"\nURL: {url}")
+    print("-" * 70)
+    
+    # Prediction
+    if result['is_phishing']:
+        print(f"[!] PHISHING DETECTED")
+        print(f"    Confidence: {result['confidence']:.1%}")
+    else:
+        print(f"[OK] APPEARS SAFE")
+        print(f"    Confidence: {result['confidence']:.1%}")
+    
+    # Key indicators
+    print("\nKey Indicators:")
+    if features['typosquatting_score'] > 0:
+        print(f"  [!] Typosquatting Score: {features['typosquatting_score']:.2f}")
+        print(f"      (Character substitution detected: 0->o, 1->i, etc.)")
+    
+    if features['missing_char_typo_score'] > 0:
+        print(f"  [!] Missing Char Typo: {features['missing_char_typo_score']:.2f}")
+        print(f"      (Resembles legitimate brand with typo)")
+    
+    if features['has_ip_address']:
+        print(f"  [!] IP Address URL (suspicious)")
+    
+    if features['is_suspicious_tld']:
+        print(f"  [!] Suspicious TLD (tk, ml, xyz, etc.)")
+    
+    if features['num_sensitive_words'] > 0:
+        print(f"  [!] Sensitive Keywords: {features['num_sensitive_words']}")
+        print(f"      (login, verify, secure, etc.)")
+    
+    if features['has_urgency_keywords']:
+        print(f"  [!] Urgency Keywords Detected")
+        print(f"      (urgent, expire, suspend, etc.)")
+    
+    # URL characteristics
+    print("\nURL Characteristics:")
+    print(f"  Protocol: {'HTTPS' if features['has_https'] else 'HTTP'}")
+    print(f"  URL Length: {features['url_length']} chars")
+    print(f"  Domain Length: {features['domain_length']} chars")
+    print(f"  Subdomains: {features['num_subdomains']}")
+    print(f"  Digits in URL: {features['num_digits']}")
+    print(f"  Hyphens: {features['num_hyphens']}")
+    
+    # Entropy (randomness)
+    print(f"\nRandomness Analysis:")
+    print(f"  URL Entropy: {features['url_entropy']:.2f}")
+    print(f"  Domain Entropy: {features['domain_entropy']:.2f}")
+    
+    print("-" * 70)
 
+def analyze_url(detector: PhishingDetector, url: str):
+    """Analyze a single URL and display results."""
+    try:
+        result = detector.predict(url)
+        
+        if result.get('error'):
+            print(f"\n[ERROR] {result['error']}")
+            return
+        
+        print_result(url, result, result['features'])
+        
+    except Exception as e:
+        print(f"\n[ERROR] Failed to analyze URL: {e}")
+
+def interactive_mode(detector: PhishingDetector):
+    """Interactive mode - analyze URLs one by one."""
+    print("Interactive Mode - Enter URLs to analyze (type 'quit' to exit)")
+    print("-" * 70)
+    
     while True:
         try:
-            url = input("\nEnter a URL: ").strip()
-            if url.lower() in {"quit", "exit", "q"}:
-                print("\n👋 Exiting analyzer. Goodbye!")
+            url = input("\nEnter URL to analyze: ").strip()
+            
+            if not url:
+                continue
+            
+            if url.lower() in ['quit', 'exit', 'q']:
+                print("\nExiting...")
                 break
-            if url:
-                analyze_url(detector, extractor, url)
+            
+            analyze_url(detector, url)
+            
         except KeyboardInterrupt:
-            print("\n\n👋 Interrupted. Exiting analyzer.")
+            print("\n\nExiting...")
             break
-        except Exception as e:
-            print(f"❌ Error analyzing URL: {e}")
+        except EOFError:
+            break
 
+def batch_mode(detector: PhishingDetector, urls: list):
+    """Batch mode - analyze multiple URLs."""
+    print(f"Batch Mode - Analyzing {len(urls)} URLs")
+    print("-" * 70)
+    
+    for i, url in enumerate(urls, 1):
+        print(f"\n[{i}/{len(urls)}] Analyzing: {url}")
+        analyze_url(detector, url)
+
+def main():
+    print_header()
+    
+    # Load model
+    print("Loading trained model...")
+    try:
+        detector = PhishingDetector.load("model.pkl")
+        print("[OK] Model loaded successfully\n")
+    except FileNotFoundError:
+        print("[ERROR] Model not found!")
+        print("Please train the model first:")
+        print("  python phishing_detector.py")
+        sys.exit(1)
+    
+    # Check for command-line arguments
+    if len(sys.argv) > 1:
+        # Batch mode - URLs provided as arguments
+        urls = sys.argv[1:]
+        batch_mode(detector, urls)
+    else:
+        # Interactive mode
+        interactive_mode(detector)
+    
+    print("\n" + "=" * 70 + "\n")
 
 if __name__ == "__main__":
     main()

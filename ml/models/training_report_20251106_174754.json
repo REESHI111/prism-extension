@@ -1,0 +1,168 @@
+{
+  "timestamp": "2025-11-06T17:47:54.528585",
+  "model_type": "ensemble",
+  "configuration": {
+    "paths": {
+      "project_root": "C:\\Users\\msi\\Downloads\\PRISM\\ml",
+      "data_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\data",
+      "models_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\models",
+      "logs_dir": "C:\\Users\\msi\\Downloads\\PRISM\\ml\\logs"
+    },
+    "model": {
+      "model_type": "ensemble",
+      "n_estimators": 150,
+      "max_depth": 25,
+      "min_samples_split": 10,
+      "min_samples_leaf": 4,
+      "max_features": "sqrt",
+      "class_weight": "balanced",
+      "random_state": 42,
+      "test_size": 0.2,
+      "validation_size": 0.1,
+      "n_jobs": -1
+    },
+    "features": {
+      "max_url_length": 200,
+      "min_domain_length": 3,
+      "extract_whois": false,
+      "use_cache": true,
+      "batch_size": 1000
+    },
+    "logging": {
+      "log_level": "INFO",
+      "log_format": "detailed"
+    },
+    "export": {
+      "export_tfjs": true,
+      "api_enabled": false,
+      "api_host": "localhost",
+      "api_port": 5000
+    }
+  },
+  "train_metrics": {
+    "train_accuracy": 0.9993608181527645,
+    "model_type": "ensemble",
+    "n_samples": 3129,
+    "n_features": 30
+  },
+  "test_metrics": {
+    "accuracy": 0.9987228607918263,
+    "precision": 1.0,
+    "recall": 0.9974424552429667,
+    "f1_score": 0.998719590268886,
+    "auc_roc": 0.9999869513022601,
+    "confusion_matrix": [
+      [
+        392,
+        0
+      ],
+      [
+        1,
+        390
+      ]
+    ],
+    "true_negatives": 392,
+    "false_positives": 0,
+    "false_negatives": 1,
+    "true_positives": 390,
+    "classification_report": {
+      "Legitimate": {
+        "precision": 0.9974554707379135,
+        "recall": 1.0,
+        "f1-score": 0.9987261146496815,
+        "support": 392.0
+      },
+      "Phishing": {
+        "precision": 1.0,
+        "recall": 0.9974424552429667,
+        "f1-score": 0.998719590268886,
+        "support": 391.0
+      },
+      "accuracy": 0.9987228607918263,
+      "macro avg": {
+        "precision": 0.9987277353689568,
+        "recall": 0.9987212276214834,
+        "f1-score": 0.9987228524592837,
+        "support": 783.0
+      },
+      "weighted avg": {
+        "precision": 0.9987261105099132,
+        "recall": 0.9987228607918263,
+        "f1-score": 0.998722856625555,
+        "support": 783.0
+      }
+    }
+  },
+  "feature_importance": {
+    "has_https": 0.2116764565990877,
+    "num_hyphens": 0.1471781819008553,
+    "num_sensitive_words": 0.137544655496212,
+    "domain_entropy": 0.055790885140541265,
+    "domain_length": 0.049609197396879384,
+    "is_suspicious_tld": 0.042867104673344356,
+    "domain_has_digits": 0.0411255819840447,
+    "typosquatting_score": 0.03739259398969011,
+    "has_www": 0.034115361917241224,
+    "vowel_ratio": 0.030502779772034454,
+    "path_length": 0.025977259430311293,
+    "num_digits": 0.024628274502270557,
+    "path_entropy": 0.02257571684755998,
+    "special_char_ratio": 0.0205106730852958,
+    "missing_char_typo_score": 0.01933155801131324,
+    "tld_length": 0.01914488382608704,
+    "digit_ratio": 0.014885567935368315,
+    "num_dots": 0.011313120788769117,
+    "url_length": 0.010435946367448384,
+    "query_length": 0.009935350650124146
+  },
+  "model_info": {
+    "model_type": "ensemble",
+    "is_trained": true,
+    "n_features": 30,
+    "feature_names": [
+      "url_length",
+      "domain_length",
+      "path_length",
+      "has_https",
+      "has_ip_address",
+      "num_dots",
+      "num_hyphens",
+      "num_underscores",
+      "num_slashes",
+      "num_digits",
+      "num_subdomains",
+      "tld_length",
+      "is_suspicious_tld",
+      "has_www",
+      "domain_has_digits",
+      "subdomain_count",
+      "num_query_params",
+      "query_length",
+      "has_at_symbol",
+      "has_double_slash_redirect",
+      "num_sensitive_words",
+      "num_external_links",
+      "url_entropy",
+      "domain_entropy",
+      "path_entropy",
+      "special_char_ratio",
+      "digit_ratio",
+      "vowel_ratio",
+      "typosquatting_score",
+      "missing_char_typo_score"
+    ],
+    "config": {
+      "model_type": "ensemble",
+      "n_estimators": 150,
+      "max_depth": 25,
+      "min_samples_split": 10,
+      "min_samples_leaf": 4,
+      "max_features": "sqrt",
+      "class_weight": "balanced",
+      "random_state": 42,
+      "test_size": 0.2,
+      "validation_size": 0.1,
+      "n_jobs": -1
+    }
+  }
+}
