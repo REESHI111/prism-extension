@@ -9,8 +9,9 @@ import { StatsManager } from '../utils/stats-manager';
 import { HistoryTracker } from '../utils/history-tracker';
 import { TrustManager } from '../utils/trust-manager';
 import { isTrackerDomain, getTrackerCategory } from '../utils/enhanced-tracker-database';
+import { getMLDetector } from '../utils/ml-phishing-detector';
 
-console.log('🛡️ PRISM Service Worker Loaded - Phase 5');
+console.log('🛡️ PRISM Service Worker Loaded - Phase 5 - Live ML Integration');
 
 const stats = StatsManager.getInstance();
 const history = HistoryTracker.getInstance();
@@ -323,7 +324,10 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
 });
 
 // Track when tab URL changes
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+// Track last auto-launched domain to prevent repeated launches on same domain
+let lastAutoLaunchedDomain: string | null = null;
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.url && tab.active) {
     try {
       const url = new URL(changeInfo.url);
@@ -341,18 +345,87 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       // Count cookies immediately
       updateCookieCount();
       
-      // Auto-launch popup for 3 seconds on page load (only for regular websites)
+      // ===== LIVE ML PHISHING DETECTION =====
       if (url.protocol === 'https:' || url.protocol === 'http:') {
-        // Mark as auto-opened so popup knows to auto-close
-        chrome.storage.local.set({ autoOpened: true, autoOpenTime: Date.now() }, () => {
-          // Open popup using action API
-          chrome.action.openPopup().catch(() => {
-            // Silently fail if popup can't be opened (e.g., user is interacting with page)
-            console.log('Could not auto-open popup (user may be busy)');
+        console.log(`🧠 Analyzing URL with live ML: ${changeInfo.url}`);
+        
+        // Analyze with ML model
+        const detector = await getMLDetector();
+        const prediction = detector.classify(changeInfo.url);
+        const mlResult = {
+          url: changeInfo.url,
+          is_phishing: prediction.isPhishing,
+          confidence: prediction.confidence,
+          risk_score: Math.round(prediction.confidence * 100),
+          risk_level: prediction.confidence >= 0.90 ? 'CRITICAL' :
+                     prediction.confidence >= 0.75 ? 'HIGH' :
+                     prediction.confidence >= 0.50 ? 'MEDIUM' :
+                     prediction.confidence >= 0.25 ? 'LOW' : 'SAFE',
+          ssl_validation: {
+            valid: changeInfo.url.startsWith('https://'),
+            issuer: null,
+            days_until_expiry: null,
+            error: null
+          },
+          reasons: [],
+          timestamp: new Date().toISOString()
+        };
+        
+        if (mlResult) {
+          console.log(`   ML Result: ${mlResult.is_phishing ? '⚠️ PHISHING' : '✅ SAFE'} (${mlResult.risk_score}/100)`);
+          console.log(`   Risk Level: ${mlResult.risk_level}`);
+          console.log(`   SSL Valid: ${mlResult.ssl_validation.valid ? '✅' : '❌'}`);
+          
+          // Store ML result for this domain
+          mlPhishingDetections.set(currentDomain, {
+            url: changeInfo.url,
+            confidence: mlResult.confidence,
+            riskLevel: mlResult.risk_level,
+            timestamp: Date.now(),
+            count: 1
           });
-        });
+          
+          // Update stats with ML analysis
+          if (mlResult.is_phishing) {
+            stats.addThreatDetail(currentDomain, {
+              id: `ml-phishing-${Date.now()}`,
+              type: 'Phishing',
+              name: `ML Detected Phishing (${mlResult.risk_level})`,
+              description: `ML confidence: ${(mlResult.confidence * 100).toFixed(1)}%, Risk: ${mlResult.risk_score}/100, SSL: ${mlResult.ssl_validation.valid ? 'Valid' : 'Invalid'}, Reasons: ${mlResult.reasons.join(', ')}`
+            });
+          }
+          
+          // Store ML result in storage for popup access
+          chrome.storage.local.set({
+            [`ml_result_${currentDomain}`]: {
+              ...mlResult,
+              analyzed_at: Date.now()
+            }
+          });
+        }
       }
-    } catch (e) {}
+      
+      // Auto-launch popup for 3 seconds on page load (only for regular websites and domain changes)
+      if (url.protocol === 'https:' || url.protocol === 'http:') {
+        // Only auto-launch if domain has changed (prevent repeated launches on internal navigation)
+        if (lastAutoLaunchedDomain !== currentDomain) {
+          lastAutoLaunchedDomain = currentDomain;
+          
+          // Mark as auto-opened so popup knows to auto-close
+          chrome.storage.local.set({ autoOpened: true, autoOpenTime: Date.now() }, () => {
+            // Open popup using action API
+            chrome.action.openPopup().catch(() => {
+              // Silently fail if popup can't be opened (e.g., user is interacting with page)
+              console.log('Could not auto-open popup (user may be busy)');
+            });
+          });
+        } else {
+          console.log('Skipping auto-launch: same domain navigation');
+        }
+      }
+    } catch (e) {
+      console.error('Error in tab update handler:', e);
+    }
   }
 });
 
@@ -810,6 +883,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
           const url = tabs[0]?.url || `https://${domain}`;
 
+          // Get ML analysis result from storage
+          const mlData = await chrome.storage.local.get([`ml_result_${domain}`]);
+          const mlResult = mlData[`ml_result_${domain}`];
+
           // Calculate score breakdown using enhanced privacy scorer
           const { EnhancedPrivacyScorer } = await import('../utils/enhanced-privacy-scorer');
           const scorer = EnhancedPrivacyScorer.getInstance();
@@ -832,10 +909,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             thirdPartyRequests: siteStats.thirdPartyRequests || 0,
             mixedContent: siteStats.mixedContent || false,
             
-            // ML Check (defaults assume safe)
+            // ML Check (include live ML data if available)
+            domain: domain,
             threatsDetected: siteStats.threatsDetected || 0,
             threatDetails: siteStats.threatDetails || [],
             domainAge: siteStats.domainAge || 365,
+            // Add ML data to factors (for scoreMLCheck to use)
+            mlRiskScore: mlResult?.risk_score,
+            mlIsPhishing: mlResult?.is_phishing,
+            mlRiskLevel: mlResult?.risk_level,
+            mlConfidence: mlResult?.confidence,
+            mlSslValid: mlResult?.ssl_validation?.valid,
             
             // SSL (default: assume HTTPS with strong TLS)
             hasSSL: siteStats.hasSSL ?? true,
@@ -883,6 +967,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (error) {
           console.error('Failed to get score breakdown:', error);
           sendResponse({ status: 'ERROR', message: 'Failed to calculate breakdown' });
+        }
+      })();
+      return true;  // Async response
+
+    case 'REQUEST_ML_ANALYSIS':
+      // Popup is requesting ML analysis for current URL
+      (async () => {
+        try {
+          const { url } = message;
+          if (!url) {
+            sendResponse({ status: 'ERROR', message: 'No URL provided' });
+            return;
+          }
+
+          const domain = new URL(url).hostname;
+          console.log('🔍 Manual ML analysis requested for:', domain);
+
+          // Perform ML analysis with real model
+          const detector = await getMLDetector();
+          const prediction = detector.classify(url);
+          const mlResult = {
+            url,
+            is_phishing: prediction.isPhishing,
+            confidence: prediction.confidence,
+            risk_score: Math.round(prediction.confidence * 100),
+            risk_level: prediction.confidence >= 0.90 ? 'CRITICAL' :
+                       prediction.confidence >= 0.75 ? 'HIGH' :
+                       prediction.confidence >= 0.50 ? 'MEDIUM' :
+                       prediction.confidence >= 0.25 ? 'LOW' : 'SAFE',
+            ssl_validation: {
+              valid: url.startsWith('https://'),
+              issuer: null,
+              days_until_expiry: null,
+              error: null
+            },
+            reasons: [],
+            timestamp: new Date().toISOString()
+          };
+          
+          if (mlResult) {
+            // Store result
+            chrome.storage.local.set({
+              [`ml_result_${domain}`]: {
+                ...mlResult,
+                analyzed_at: Date.now()
+              }
+            });
+
+            // Track if phishing detected
+            if (mlResult.is_phishing) {
+              stats.addThreatDetail(domain, {
+                id: `ml-${domain}-${Date.now()}`,
+                type: 'Phishing',
+                name: `ML Detected Phishing (${mlResult.risk_level})`,
+                description: `Risk Score: ${mlResult.risk_score}/100`
+              });
+            }
+
+            console.log('✅ ML analysis complete:', mlResult);
+            sendResponse({ status: 'OK', data: mlResult });
+          } else {
+            console.warn('⚠️ ML analysis returned no result');
+            sendResponse({ status: 'ERROR', message: 'ML analysis failed' });
+          }
+        } catch (error) {
+          console.error('❌ ML analysis error:', error);
+          sendResponse({ status: 'ERROR', message: error.message });
         }
       })();
       return true;  // Async response

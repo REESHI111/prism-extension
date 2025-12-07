@@ -23,7 +23,8 @@ export interface PrivacyFactors {
   thirdPartyRequests?: number;
   mixedContent?: boolean;
   
-  // ML Check (placeholder)
+  // ML Check
+  domain?: string;
   domainAge?: number;
   threatsDetected?: number;
   
@@ -350,20 +351,43 @@ export class EnhancedPrivacyScorer {
 
   /**
    * 4) ML Check - weight 15%
-   * ⚠️ HARDCODED PLACEHOLDER - ML model NOT trained yet
-   * Returns 100/100 until real ML model is implemented
-   * Threats are handled separately in global penalties
+   * Uses live ML phishing detection results passed via factors
    */
   private scoreMLCheck(factors: PrivacyFactors): CategoryScore {
     const issues: string[] = [];
     const recommendations: string[] = [];
     
-    // HARDCODED: Always return 100/100 since ML is not ready
-    // Do NOT penalize based on heuristics - unfair to sites
+    // Check if ML data was provided in factors (added by stats manager)
+    const mlRiskScore = (factors as any).mlRiskScore;
+    const mlIsPhishing = (factors as any).mlIsPhishing;
+    const mlRiskLevel = (factors as any).mlRiskLevel;
+    const mlConfidence = (factors as any).mlConfidence;
+    const mlSslValid = (factors as any).mlSslValid;
+    
+    if (mlRiskScore !== undefined) {
+      // Use ML risk score (invert: 0 risk = 100 score, 100 risk = 0 score)
+      const score = Math.max(0, 100 - mlRiskScore);
+      
+      if (mlIsPhishing) {
+        issues.push(`⚠️ ML detected phishing (${mlRiskLevel})`);
+        issues.push(`Risk score: ${mlRiskScore}/100`);
+        recommendations.push('Exercise extreme caution on this site');
+        if (!mlSslValid) {
+          issues.push('SSL certificate invalid');
+        }
+      } else {
+        issues.push(`✓ ML verified safe (${(mlConfidence * 100).toFixed(1)}% confidence)`);
+        if (mlSslValid) {
+          issues.push('✓ Valid SSL certificate');
+        }
+      }
+      
+      return { score, weight: 0, weightedScore: 0, issues, recommendations };
+    }
+    
+    // Fallback if no ML data available yet
     const score = 100;
-
-    issues.push('✓ ML check: model not trained (default safe)');
-
+    issues.push('⏳ ML analysis pending...');
     return { score, weight: 0, weightedScore: 0, issues, recommendations };
   }
 

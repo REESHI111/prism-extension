@@ -5,7 +5,7 @@
  * Phase 5: ML-Powered Phishing Detection (Non-blocking)
  */
 
-import { mlDetector } from '../utils/ml-phishing-detector';
+import { getMLDetector } from '../utils/ml-phishing-detector';
 
 console.log('🔍 PRISM Content Script Loaded - Phase 5');
 console.log('📍 Page:', window.location.href);
@@ -47,12 +47,14 @@ let mlPrediction: any = null;
 
 (async () => {
   try {
-    mlPrediction = await mlDetector.predict(currentUrl);
+    const detector = await getMLDetector();
+    mlPrediction = detector.classify(currentUrl);
     console.log('🧠 ML Phishing Detection Result:', mlPrediction);
+    console.log(`📊 Confidence: ${(mlPrediction.confidence * 100).toFixed(1)}%`);
     
     // Report phishing detection to background (no page blocking)
     if (mlPrediction.isPhishing) {
-      console.log(`⚠️ [PRISM] Phishing detected (${mlPrediction.riskLevel} risk) - Reporting only`);
+      console.log(`⚠️ [PRISM] Phishing detected (${(mlPrediction.confidence * 100).toFixed(1)}% confidence) - Reporting only`);
       
       chrome.runtime.sendMessage({
         type: 'ML_PHISHING_DETECTED',

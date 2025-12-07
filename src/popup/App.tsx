@@ -121,6 +121,11 @@ interface SecurityMetrics {
   malwareThreats: number;
   phishingDetected: number;
   privacyRating: 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
+  mlRiskScore?: number;  // Live ML risk score (0-100)
+  mlRiskLevel?: 'SAFE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  mlConfidence?: number; // ML confidence (0-1)
+  sslValid?: boolean;    // SSL certificate validation
+  sslError?: string | null;
 }
 
 interface SecurityReport {
@@ -162,8 +167,14 @@ const App: React.FC = () => {
     requestsAnalyzed: 0,
     malwareThreats: 0,
     phishingDetected: 0,
-    privacyRating: 'Excellent'
+    privacyRating: 'Excellent',
+    mlRiskScore: 0,
+    mlRiskLevel: 'SAFE',
+    mlConfidence: 0,
+    sslValid: true,
+    sslError: null
   });
+  const [mlAnalysis, setMlAnalysis] = useState<any>(null);
 
   useEffect(() => {
     initializeExtension();
@@ -239,6 +250,28 @@ const App: React.FC = () => {
       const tabResponse = await chrome.runtime.sendMessage({ type: 'GET_TAB_INFO' });
       if (tabResponse?.status === 'OK' && tabResponse.data) {
         const domain = tabResponse.data.domain;
+        setTabInfo(tabResponse.data);
+        
+        // === LOAD LIVE ML ANALYSIS ===
+        let mlResult = null;
+        try {
+          const mlData = await chrome.storage.local.get([`ml_result_${domain}`]);
+          mlResult = mlData[`ml_result_${domain}`];
+          
+          if (mlResult && mlResult.analyzed_at) {
+            console.log('🧠 ML Analysis loaded:', mlResult);
+            setMlAnalysis(mlResult);
+          } else {
+            console.log('⏳ ML Analysis not yet available for:', domain);
+            // Trigger ML analysis by sending message to service worker
+            chrome.runtime.sendMessage({ 
+              type: 'REQUEST_ML_ANALYSIS', 
+              url: `${tabResponse.data.protocol}//${domain}` 
+            }).catch(err => console.log('ML analysis request sent:', err));
+          }
+        } catch (error) {
+          console.error('Failed to load ML analysis:', error);
+        }
         
         // Get trust level for current domain
         const trustResponse = await chrome.runtime.sendMessage({ 
@@ -268,7 +301,7 @@ const App: React.FC = () => {
           const privacyPolicy = siteData?.privacyPolicyFound ?? false;
           const mixedContent = siteData?.mixedContent ?? false;
           
-          // Get ML phishing detection count for current site (FIXED: await the response)
+          // Get ML phishing detection count for current site
           let phishingCount = 0;
           try {
             const detectionResponse = await chrome.runtime.sendMessage({ 
@@ -292,6 +325,13 @@ const App: React.FC = () => {
           
           console.log('📊 Stats loaded:', { domain, score, trackers, cookies, requests, threats, thirdParty, hasSSL, privacyPolicy, mixedContent, phishingCount });
           
+          // Use ML data from the loaded result directly (not from state due to async updates)
+          const mlRiskScore = mlResult?.risk_score ?? 0;
+          const mlRiskLevel = mlResult?.risk_level ?? 'SAFE';
+          const mlConfidence = mlResult?.confidence ?? 0;
+          const sslValid = mlResult?.ssl_validation?.valid ?? true;
+          const sslError = mlResult?.ssl_validation?.error ?? null;
+          
           setMetrics({
             overallScore: score,
             trackersBlocked: trackers,
@@ -300,7 +340,12 @@ const App: React.FC = () => {
             requestsAnalyzed: requests,
             malwareThreats: threats,
             phishingDetected: phishingCount,
-            privacyRating: getScoreRating(score) as any
+            privacyRating: getScoreRating(score) as any,
+            mlRiskScore,
+            mlRiskLevel,
+            mlConfidence,
+            sslValid,
+            sslError
           });
           
           setSecurityReport({
@@ -823,6 +868,166 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* ML-Powered Phishing Detection - Always Visible */}
+        {true && (
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-3xl blur-2xl"></div>
+            <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-xl border border-slate-600/30 rounded-3xl p-6 shadow-2xl">{/* Header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-white font-semibold text-sm">AI Phishing Analysis</h3>
+                  <p className="text-xs text-slate-400">Real-time ML-powered detection</p>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                  (mlAnalysis?.risk_level === 'CRITICAL') ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                  (mlAnalysis?.risk_level === 'HIGH') ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' :
+                  (mlAnalysis?.risk_level === 'MEDIUM') ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                  (mlAnalysis?.risk_level === 'LOW') ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                  'bg-slate-500/20 text-slate-300 border border-slate-500/30'
+                }`}>
+                  {mlAnalysis?.risk_level || 'ANALYZING'}
+                </div>
+              </div>
+
+              {/* Risk Score Display */}
+              <div className="flex items-center gap-4 mb-4">
+                {/* Circular Risk Gauge */}
+                <div className="relative w-24 h-24">
+                  <svg className="w-24 h-24 transform -rotate-90">
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="42"
+                      stroke="rgba(148, 163, 184, 0.1)"
+                      strokeWidth="8"
+                      fill="none"
+                    />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r="42"
+                      stroke={
+                        (mlAnalysis?.risk_score ?? 0) >= 80 ? '#ef4444' :
+                        (mlAnalysis?.risk_score ?? 0) >= 60 ? '#f59e0b' :
+                        (mlAnalysis?.risk_score ?? 0) >= 40 ? '#eab308' :
+                        (mlAnalysis?.risk_score ?? 0) >= 20 ? '#3b82f6' : '#10b981'
+                      }
+                      strokeWidth="8"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 42}`}
+                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - (mlAnalysis?.risk_score ?? 0) / 100)}`}
+                      className="transition-all duration-1000 ease-out"
+                      style={{
+                        filter: `drop-shadow(0 0 6px ${
+                          (mlAnalysis?.risk_score ?? 0) >= 80 ? '#ef4444' :
+                          (mlAnalysis?.risk_score ?? 0) >= 60 ? '#f59e0b' :
+                          (mlAnalysis?.risk_score ?? 0) >= 40 ? '#eab308' :
+                          (mlAnalysis?.risk_score ?? 0) >= 20 ? '#3b82f6' : '#10b981'
+                        })`
+                      }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="text-2xl font-bold text-white">{mlAnalysis?.risk_score ?? 0}</div>
+                    <div className="text-xs text-slate-400">RISK</div>
+                  </div>
+                </div>
+
+                {/* Risk Details */}
+                <div className="flex-1 space-y-2">
+                  {/* Confidence */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-slate-400">Confidence</span>
+                      <span className="text-xs font-semibold text-white">{((mlAnalysis?.confidence ?? 0) * 100).toFixed(1)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-600/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                        style={{ width: `${(mlAnalysis?.confidence ?? 0) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* SSL Status */}
+                  <div className="flex items-center gap-2 bg-slate-700/30 rounded-lg px-3 py-2">
+                    {mlAnalysis?.ssl_validation?.valid ? (
+                      <>
+                        <span className="text-emerald-400">🔒</span>
+                        <span className="text-xs text-emerald-300 font-medium">SSL Certificate Valid</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-red-400">⚠️</span>
+                        <span className="text-xs text-red-300 font-medium">{mlAnalysis?.ssl_validation?.error ? 'SSL Certificate Invalid' : 'Checking SSL...'}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Verdict */}
+                  <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
+                    mlAnalysis?.is_phishing 
+                      ? 'bg-red-500/10 border border-red-500/30' 
+                      : 'bg-emerald-500/10 border border-emerald-500/30'
+                  }`}>
+                    <span className="text-lg">{mlAnalysis?.is_phishing ? '🎣' : '✓'}</span>
+                    <span className={`text-xs font-semibold ${
+                      mlAnalysis?.is_phishing ? 'text-red-300' : 'text-emerald-300'
+                    }`}>
+                      {mlAnalysis?.is_phishing ? 'Phishing Detected' : (mlAnalysis ? 'Site Appears Safe' : 'Analyzing...')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detailed Reasons */}
+              {mlAnalysis?.reasons && mlAnalysis.reasons.length > 0 && (
+                <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/20">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs font-semibold text-slate-300">🔍 Detection Details</span>
+                  </div>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {mlAnalysis.reasons.map((reason: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2 text-xs">
+                        <span className="text-orange-400 mt-0.5">•</span>
+                        <span className="text-slate-300 flex-1">{reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SSL Error Details */}
+              {mlAnalysis?.ssl_validation && !mlAnalysis.ssl_validation.valid && mlAnalysis.ssl_validation.error && (
+                <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-xs">⚠️</span>
+                    <div className="flex-1">
+                      <div className="text-xs font-semibold text-red-300 mb-1">SSL Certificate Error</div>
+                      <div className="text-xs text-red-200/80">{mlAnalysis.ssl_validation.error}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Analysis Timestamp */}
+              <div className="mt-4 pt-3 border-t border-slate-600/30 flex items-center justify-between">
+                <span className="text-xs text-slate-500">Last analyzed</span>
+                <span className="text-xs text-slate-400">
+                  {mlAnalysis?.analyzed_at ? new Date(mlAnalysis.analyzed_at).toLocaleTimeString() : 'Pending...'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Security Metrics Grid */}
         <div className="grid grid-cols-2 gap-3">
