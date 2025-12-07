@@ -1,6 +1,0 @@
-# Processed datasets ready for training
-
-After running data_preparation.py, you'll find:
-- `features.csv` - Extracted features
-- `labels.csv` - Corresponding labels
-- `train_test_split.pkl` - Split data for reproducibility

@@ -39,5 +39,14 @@
     "16": "icon16.png",
     "48": "icon48.png",
     "128": "icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "ml/model_lightweight.json",
+        "content/fingerprint-protection.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

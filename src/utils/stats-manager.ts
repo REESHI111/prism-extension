@@ -11,16 +11,43 @@ export interface SiteStats {
   domain: string;
   trackersBlocked: number;
   cookiesBlocked: number;
-  requestsAnalyzed: number;
+  requestsAnalyzed: number; // Real per-site request count
   threatsDetected: number;
+  threatDetails?: Array<{
+    id: string;
+    type: string;
+    name: string;
+    description: string;
+    timestamp: number;
+  }>;
   fingerprintAttempts: number;
-  thirdPartyScripts: number;
+  thirdPartyScripts: number; // Real third-party script count
   mixedContent: boolean;
   privacyPolicyFound: boolean;
   timestamp: number;
   securityScore: number;
   protocol: string;
   hasSSL: boolean;
+  
+  // Enhanced metrics for weighted scoring
+  trackerVendors?: string[];
+  secureCookies?: number;
+  httpOnlyCookies?: number;
+  sameSiteCookies?: number;
+  thirdPartyCookies?: number;
+  totalRequests?: number;
+  thirdPartyRequests?: number;
+  phishingScore?: number;
+  domainAge?: number;
+  sslExpiry?: number;
+  sslStrength?: 'strong' | 'medium' | 'weak';
+  hasHSTS?: boolean;
+  privacyPolicyQuality?: 'good' | 'medium' | 'poor';
+  scriptVendors?: string[];
+  hasObfuscatedScripts?: boolean;
+  formsWithPII?: number;
+  insecureFormSubmit?: boolean;
+  piiInQueryParams?: boolean;
 }
 
 export interface GlobalStats {
@@ -73,7 +100,37 @@ export class StatsManager {
       }
       
       if (result[SITE_STATS_KEY]) {
-        this.currentSiteStats = new Map(Object.entries(result[SITE_STATS_KEY]));
+        const siteStatsObj = result[SITE_STATS_KEY];
+        this.currentSiteStats = new Map(Object.entries(siteStatsObj));
+        
+        // CRITICAL FIX: Clean up old fingerprinting threats from threatDetails
+        // Fingerprinting should NOT be in threatDetails (it's HIGH severity, not CRITICAL)
+        let needsSave = false;
+        for (const [domain, stats] of this.currentSiteStats.entries()) {
+          if (stats.threatDetails && stats.threatDetails.length > 0) {
+            const beforeCount = stats.threatDetails.length;
+            
+            // Remove any fingerprinting threats (they should use fingerprintAttempts instead)
+            stats.threatDetails = stats.threatDetails.filter(
+              t => t.type !== 'Fingerprinting'
+            );
+            
+            const afterCount = stats.threatDetails.length;
+            
+            if (beforeCount !== afterCount) {
+              // Update threat count to match cleaned threatDetails
+              stats.threatsDetected = stats.threatDetails.length;
+              needsSave = true;
+              console.log(`🧹 Cleaned ${beforeCount - afterCount} fingerprinting threats from ${domain}`);
+            }
+          }
+        }
+        
+        // Save if we cleaned anything
+        if (needsSave) {
+          await this.saveStats();
+          console.log('✅ Cleaned up old fingerprinting threat data');
+        }
       }
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -111,10 +168,77 @@ export class StatsManager {
     this.saveStats();
   }
 
-  incrementThreatDetected(domain: string): void {
-    this.globalStats.totalThreatsDetected++;
-    this.updateSiteStats(domain, 'threatsDetected');
+  addThreatDetail(domain: string, threat: {
+    id: string;
+    type: string;
+    name: string;
+    description: string;
+  }): void {
+    let stats = this.ensureSiteStats(domain);
+    
+    if (!stats.threatDetails) {
+      stats.threatDetails = [];
+    }
+    
+    // Check if threat already exists (prevent duplicates)
+    const existingThreat = stats.threatDetails.find(t => t.id === threat.id);
+    if (existingThreat) {
+      // Update timestamp of existing threat
+      existingThreat.timestamp = Date.now();
+    } else {
+      // Add new unique threat
+      stats.threatDetails.push({
+        ...threat,
+        timestamp: Date.now()
+      });
+    }
+    
+    // Update threat count to match unique threats
+    stats.threatsDetected = stats.threatDetails.length;
+    this.globalStats.totalThreatsDetected = Array.from(this.currentSiteStats.values())
+      .reduce((sum, s) => sum + (s.threatsDetected || 0), 0);
+    
+    this.currentSiteStats.set(domain, stats);
     this.saveStats();
+  }
+
+  incrementThreatDetected(domain: string): void {
+    // Deprecated: Use addThreatDetail instead
+    // Keeping for backward compatibility
+    this.addThreatDetail(domain, {
+      id: `generic-${Date.now()}`,
+      type: 'Generic',
+      name: 'Potential Security Risk',
+      description: 'Generic security threat detected'
+    });
+  }
+
+  private ensureSiteStats(domain: string): SiteStats {
+    let stats = this.currentSiteStats.get(domain);
+    
+    if (!stats) {
+      stats = {
+        url: '',
+        domain,
+        trackersBlocked: 0,
+        cookiesBlocked: 0,
+        requestsAnalyzed: 0,
+        threatsDetected: 0,
+        threatDetails: [],
+        fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
+        timestamp: Date.now(),
+        securityScore: 100,
+        protocol: 'https:',
+        hasSSL: true
+      };
+      this.currentSiteStats.set(domain, stats);
+      this.globalStats.sitesVisited++;
+    }
+    
+    return stats;
   }
 
   incrementFingerprintAttempt(domain: string): void {
@@ -154,6 +278,90 @@ export class StatsManager {
     this.currentSiteStats.set(domain, stats);
     this.globalStats.lastUpdated = Date.now();
     this.globalStats.totalCookiesManaged = count;
+  }
+
+  updateEnhancedCookieMetrics(domain: string, metrics: {
+    total: number;
+    secure: number;
+    httpOnly: number;
+    sameSite: number;
+    thirdParty: number;
+  }): void {
+    let stats = this.currentSiteStats.get(domain);
+    
+    if (!stats) {
+      stats = {
+        url: '',
+        domain,
+        trackersBlocked: 0,
+        cookiesBlocked: metrics.total,
+        requestsAnalyzed: 0,
+        threatsDetected: 0,
+        fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
+        timestamp: Date.now(),
+        securityScore: 100,
+        protocol: 'https:',
+        hasSSL: true,
+        // Enhanced cookie metrics
+        secureCookies: metrics.secure,
+        httpOnlyCookies: metrics.httpOnly,
+        sameSiteCookies: metrics.sameSite,
+        thirdPartyCookies: metrics.thirdParty
+      };
+      this.globalStats.sitesVisited++;
+    } else {
+      stats.cookiesBlocked = metrics.total;
+      stats.secureCookies = metrics.secure;
+      stats.httpOnlyCookies = metrics.httpOnly;
+      stats.sameSiteCookies = metrics.sameSite;
+      stats.thirdPartyCookies = metrics.thirdParty;
+    }
+    
+    stats.timestamp = Date.now();
+    stats.securityScore = this.calculateEnhancedSecurityScore(stats);
+    
+    this.currentSiteStats.set(domain, stats);
+    this.globalStats.lastUpdated = Date.now();
+    this.globalStats.totalCookiesManaged = metrics.total;
+    this.saveStats();
+  }
+
+  updateRequestMetrics(domain: string, totalRequests: number, thirdPartyRequests: number): void {
+    let stats = this.currentSiteStats.get(domain);
+    
+    if (!stats) {
+      stats = {
+        url: '',
+        domain,
+        trackersBlocked: 0,
+        cookiesBlocked: 0,
+        requestsAnalyzed: 0,
+        threatsDetected: 0,
+        fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
+        timestamp: Date.now(),
+        securityScore: 100,
+        protocol: 'https:',
+        hasSSL: true,
+        totalRequests,
+        thirdPartyRequests
+      };
+      this.globalStats.sitesVisited++;
+    } else {
+      stats.totalRequests = totalRequests;
+      stats.thirdPartyRequests = thirdPartyRequests;
+    }
+    
+    stats.timestamp = Date.now();
+    stats.securityScore = this.calculateEnhancedSecurityScore(stats);
+    
+    this.currentSiteStats.set(domain, stats);
+    this.globalStats.lastUpdated = Date.now();
     this.saveStats();
   }
 
@@ -291,19 +499,60 @@ export class StatsManager {
   }
 
   private calculateEnhancedSecurityScore(stats: SiteStats): number {
+    // Map SiteStats to PrivacyFactors with SENSIBLE DEFAULTS
+    // Missing data = assume safe/normal values (prevents 0/100 bug)
     const factors: PrivacyFactors = {
-      trackersBlocked: stats.trackersBlocked,
-      cookiesManaged: stats.cookiesBlocked,
-      fingerprintAttempts: stats.fingerprintAttempts,
-      threatsDetected: stats.threatsDetected,
-      sslCertificate: stats.hasSSL,
-      privacyPolicyFound: stats.privacyPolicyFound,  // Real data
-      thirdPartyScripts: stats.thirdPartyScripts,     // Real data
-      mixedContent: stats.mixedContent,               // Real data
-      httpOnly: stats.protocol === 'http:'
+      // Trackers (0 = perfect score)
+      trackersBlocked: stats.trackersBlocked || 0,
+      trackerVendors: stats.trackerVendors || [],
+      fingerprintAttempts: stats.fingerprintAttempts || 0,
+      
+      // Cookies (0 = perfect, only third-party penalized)
+      cookiesManaged: stats.cookiesBlocked || 0,
+      secureCookies: stats.secureCookies || 0,
+      httpOnlyCookies: stats.httpOnlyCookies || 0,
+      sameSiteCookies: stats.sameSiteCookies || 0,
+      thirdPartyCookies: stats.thirdPartyCookies || 0,
+      
+      // Requests (total doesn't matter, only ratio)
+      totalRequests: stats.totalRequests || stats.requestsAnalyzed || 0,
+      thirdPartyRequests: stats.thirdPartyRequests || 0,
+      mixedContent: stats.mixedContent || false,
+      
+      // ML Check (defaults assume safe)
+      threatsDetected: stats.threatsDetected || 0,
+      domainAge: stats.domainAge || 365, // Default: 1 year old = trusted
+      
+      // SSL (default: assume HTTPS with strong TLS)
+      hasSSL: stats.hasSSL ?? true,
+      sslStrength: stats.sslStrength || 'strong',
+      sslExpired: stats.sslExpiry ? stats.sslExpiry < Date.now() : false,
+      
+      // Privacy Policy
+      hasPrivacyPolicy: stats.privacyPolicyFound || false,
+      privacyPolicyAccessible: stats.privacyPolicyFound || false,
+      
+      // Third-party Scripts
+      thirdPartyScripts: stats.thirdPartyScripts || 0,
+      inlineScripts: 0,
+      
+      // Data Collection
+      formsDetected: stats.formsWithPII || 0,
+      autofillDisabled: false,
+      piiCollected: stats.piiInQueryParams || stats.insecureFormSubmit || false
     };
 
-    const result = this.scorer.calculateScore(factors);
+    const url = stats.url || `https://${stats.domain}`;
+    const result = this.scorer.calculateScore(factors, url);
+    
+    console.log(`📊 Score for ${stats.domain}: ${result.score}/100`, {
+      trackers: stats.trackersBlocked || 0,
+      cookies: stats.cookiesBlocked || 0,
+      thirdPartyCookies: stats.thirdPartyCookies || 0,
+      requests: stats.totalRequests || 0,
+      ssl: stats.hasSSL ?? true
+    });
+    
     return result.score;
   }
 
@@ -338,6 +587,30 @@ export class StatsManager {
 
   getSiteStats(domain: string): SiteStats | null {
     return this.currentSiteStats.get(domain) || null;
+  }
+
+  /**
+   * Calculate security score for any site data without storing it
+   * Useful for calculating scores for sites we haven't tracked yet
+   */
+  calculateScoreForSite(partialStats: Partial<SiteStats>): number {
+    const fullStats: SiteStats = {
+      url: partialStats.url || `https://${partialStats.domain || 'unknown'}`,
+      domain: partialStats.domain || 'unknown',
+      trackersBlocked: partialStats.trackersBlocked || 0,
+      cookiesBlocked: partialStats.cookiesBlocked || 0,
+      fingerprintAttempts: partialStats.fingerprintAttempts || 0,
+      requestsAnalyzed: partialStats.requestsAnalyzed || 0,
+      threatsDetected: partialStats.threatsDetected || 0,
+      hasSSL: partialStats.hasSSL ?? true,
+      privacyPolicyFound: partialStats.privacyPolicyFound ?? false,
+      thirdPartyScripts: partialStats.thirdPartyScripts || 0,
+      mixedContent: partialStats.mixedContent ?? false,
+      protocol: partialStats.protocol || 'https:',
+      securityScore: 0, // Will be calculated
+      timestamp: Date.now()
+    };
+    return this.calculateEnhancedSecurityScore(fullStats);
   }
 
   getGlobalStats(): GlobalStats {

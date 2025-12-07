@@ -90,6 +90,14 @@ const CriticalIcon = () => (
   </svg>
 );
 
+const InfoIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="16" x2="12" y2="12"/>
+    <line x1="12" y1="8" x2="12.01" y2="8"/>
+  </svg>
+);
+
 interface ExtensionStatus {
   active: boolean;
   version: string;
@@ -107,9 +115,11 @@ interface TabInfo {
 interface SecurityMetrics {
   overallScore: number;
   trackersBlocked: number;
+  threatsDetected: number;
   cookiesManaged: number;
   requestsAnalyzed: number;
   malwareThreats: number;
+  phishingDetected: number;
   privacyRating: 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Critical';
 }
 
@@ -130,9 +140,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [trustLevel, setTrustLevel] = useState<'trusted' | 'blocked' | 'unknown'>('unknown');
   const [extensionEnabled, setExtensionEnabled] = useState(true);
   const [blockingEnabled, setBlockingEnabled] = useState(true);
+  const [featureHealth, setFeatureHealth] = useState<any>(null);
+  const [scoreBreakdown, setScoreBreakdown] = useState<any>(null);
   const [securityReport, setSecurityReport] = useState<SecurityReport>({
     hasSSL: true,
     protocol: 'https:',
@@ -144,9 +157,11 @@ const App: React.FC = () => {
   const [metrics, setMetrics] = useState<SecurityMetrics>({
     overallScore: 100,
     trackersBlocked: 0,
+    threatsDetected: 0,
     cookiesManaged: 0,
     requestsAnalyzed: 0,
     malwareThreats: 0,
+    phishingDetected: 0,
     privacyRating: 'Excellent'
   });
 
@@ -154,6 +169,34 @@ const App: React.FC = () => {
     initializeExtension();
     calculateSecurityMetrics();
     loadToggleStates();
+    checkFeatureHealth();
+    
+    // Check if popup was auto-opened and set auto-close timer
+    chrome.storage.local.get(['autoOpened', 'autoOpenTime'], (result) => {
+      if (result.autoOpened && result.autoOpenTime) {
+        const timeSinceOpen = Date.now() - result.autoOpenTime;
+        
+        // Only auto-close if opened within last 500ms (confirms it's auto-open, not manual)
+        if (timeSinceOpen < 500) {
+          console.log('🔔 Auto-opened popup - will close in 3 seconds');
+          
+          // Set 3-second timer to close popup
+          const autoCloseTimer = setTimeout(() => {
+            console.log('⏰ Auto-closing popup');
+            window.close();
+          }, 3000);
+          
+          // Clear the auto-open flag so next manual open doesn't auto-close
+          chrome.storage.local.remove(['autoOpened', 'autoOpenTime']);
+          
+          // Clean up timer on unmount
+          return () => clearTimeout(autoCloseTimer);
+        } else {
+          // Old auto-open flag, clear it
+          chrome.storage.local.remove(['autoOpened', 'autoOpenTime']);
+        }
+      }
+    });
     
     // Listen for stats updates
     chrome.runtime.onMessage.addListener((message) => {
@@ -172,6 +215,13 @@ const App: React.FC = () => {
       clearInterval(statsInterval);
     };
   }, []);
+
+  // Load score breakdown when tab info changes
+  useEffect(() => {
+    if (tabInfo?.domain) {
+      loadScoreBreakdown();
+    }
+  }, [tabInfo]);
 
   const loadToggleStates = async () => {
     try {
@@ -218,6 +268,21 @@ const App: React.FC = () => {
           const privacyPolicy = siteData?.privacyPolicyFound ?? false;
           const mixedContent = siteData?.mixedContent ?? false;
           
+          // Get ML phishing detection count for current site (FIXED: await the response)
+          let phishingCount = 0;
+          try {
+            const detectionResponse = await chrome.runtime.sendMessage({ 
+              type: 'GET_ML_DETECTIONS', 
+              domain: tabInfo.domain 
+            });
+            if (detectionResponse?.status === 'OK' && detectionResponse.data) {
+              phishingCount = detectionResponse.data.count || 0;
+              console.log(`🧠 ML Phishing detections for ${tabInfo.domain}:`, phishingCount);
+            }
+          } catch (error) {
+            console.error('Failed to get ML detections:', error);
+          }
+          
           // Calculate data collection level based on trackers + cookies + third-party
           const dataScore = trackers + cookies + Math.floor(thirdParty / 2);
           let dataLevel: 'Minimal' | 'Moderate' | 'High' | 'Excessive' = 'Minimal';
@@ -225,14 +290,16 @@ const App: React.FC = () => {
           else if (dataScore > 50) dataLevel = 'High';
           else if (dataScore > 20) dataLevel = 'Moderate';
           
-          console.log('📊 Stats loaded:', { domain, score, trackers, cookies, requests, threats, thirdParty, hasSSL, privacyPolicy, mixedContent });
+          console.log('📊 Stats loaded:', { domain, score, trackers, cookies, requests, threats, thirdParty, hasSSL, privacyPolicy, mixedContent, phishingCount });
           
           setMetrics({
             overallScore: score,
             trackersBlocked: trackers,
+            threatsDetected: threats,
             cookiesManaged: cookies,
             requestsAnalyzed: requests,
             malwareThreats: threats,
+            phishingDetected: phishingCount,
             privacyRating: getScoreRating(score) as any
           });
           
@@ -301,6 +368,41 @@ const App: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load tab info:', error);
+    }
+  };
+
+  // Helper to detect special URLs (new tab, chrome pages, etc.)
+  const isSpecialUrl = (url: string | undefined): boolean => {
+    if (!url) return true;
+    return (
+      url.startsWith('chrome://') ||
+      url.startsWith('edge://') ||
+      url.startsWith('about:') ||
+      url.startsWith('chrome-extension://') ||
+      url === 'newtab' ||
+      url === ''
+    );
+  };
+
+  const checkFeatureHealth = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'CHECK_FEATURE_HEALTH' });
+      if (response?.status === 'OK') {
+        setFeatureHealth(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to check feature health:', error);
+    }
+  };
+
+  const loadScoreBreakdown = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_SCORE_BREAKDOWN', domain: tabInfo?.domain });
+      if (response?.status === 'OK') {
+        setScoreBreakdown(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load score breakdown:', error);
     }
   };
 
@@ -459,6 +561,37 @@ const App: React.FC = () => {
     );
   }
 
+  // Minimal UI for special URLs (new tab, chrome pages, etc.)
+  if (isSpecialUrl(tabInfo?.url)) {
+    return (
+      <div className="w-[420px] h-[250px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white font-sans relative overflow-hidden flex flex-col items-center justify-center">
+        {/* Background Effects */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.15),transparent_60%)] pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none"></div>
+        
+        {/* Logo */}
+        <div className="flex items-center gap-3 mb-6 relative z-10">
+          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/40">
+            <ShieldIcon />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">PRISM</h1>
+            <p className="text-sm text-slate-400">Privacy & Security Monitor</p>
+          </div>
+        </div>
+        
+        {/* Status */}
+        <div className="text-center relative z-10 bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-xl px-6 py-3">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-lg shadow-emerald-500/50"></div>
+            <span className="text-sm font-medium text-slate-300">Extension Active</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">Navigate to a website to view security metrics</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-[420px] h-[600px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
       {/* Settings Panel */}
@@ -578,6 +711,18 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              {/* Info Button */}
+              <button
+                onClick={async () => {
+                  await loadScoreBreakdown();
+                  setShowBreakdown(true);
+                }}
+                className="absolute top-4 right-4 w-7 h-7 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-400 transition-all"
+                title="View Score Breakdown"
+              >
+                <InfoIcon />
+              </button>
+
               {/* Risk Level Badge */}
               <div className={`px-5 py-2.5 bg-gradient-to-r ${getRiskLevelDetails(metrics.overallScore).bgColor} border ${getRiskLevelDetails(metrics.overallScore).borderColor} rounded-full transition-all duration-500 hover:scale-105 group`}>
                 <div className="flex items-center gap-2.5">
@@ -618,6 +763,16 @@ const App: React.FC = () => {
                             🚫
                           </span>
                         )}
+                        {/* AI Verification Badge */}
+                        {metrics.phishingDetected === 0 && (
+                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs font-semibold rounded border border-blue-500/30 flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                              <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            </svg>
+                            AI Verified
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-slate-400 text-xs">
@@ -634,6 +789,32 @@ const App: React.FC = () => {
                         >
                           {trustLevel === 'trusted' ? 'Untrust' : 'Trust'}
                         </button>
+                        {/* Access Blocked Site Button - Shows when site is blocked */}
+                        {trustLevel === 'blocked' && (
+                          <button
+                            onClick={async () => {
+                              if (tabInfo?.domain) {
+                                try {
+                                  await chrome.runtime.sendMessage({
+                                    type: 'BYPASS_BLOCKED_SITE',
+                                    domain: tabInfo.domain
+                                  });
+                                  // Reload the current tab to apply bypass
+                                  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                                  if (tabs[0]?.id) {
+                                    chrome.tabs.reload(tabs[0].id);
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to bypass site:', error);
+                                }
+                              }
+                            }}
+                            className="px-2 py-0.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 rounded text-xs font-medium text-orange-300 transition-all"
+                            title="Temporarily allow access to this blocked site"
+                          >
+                            Access Blocked Site
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -645,17 +826,19 @@ const App: React.FC = () => {
 
         {/* Security Metrics Grid */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Trackers Blocked */}
-          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
-                <XIcon />
+          {/* Threats Detected - Only show when threats exist */}
+          {metrics.threatsDetected > 0 && (
+            <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-red-500/30 transition-all duration-300">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center text-red-400">
+                  <span className="text-lg">⚠️</span>
+                </div>
+                <span className="text-slate-400 text-xs font-medium">Threats</span>
               </div>
-              <span className="text-slate-400 text-xs font-medium">Trackers</span>
+              <p className="text-2xl font-bold text-white">{metrics.threatsDetected}</p>
+              <p className="text-xs text-slate-500 mt-1">Detected</p>
             </div>
-            <p className="text-2xl font-bold text-white">{metrics.trackersBlocked}</p>
-            <p className="text-xs text-slate-500 mt-1">Blocked</p>
-          </div>
+          )}
 
           {/* Cookies Managed */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
@@ -681,17 +864,18 @@ const App: React.FC = () => {
             <p className="text-xs text-slate-500 mt-1">Analyzed</p>
           </div>
 
-          {/* Malware Threats */}
+          {/* Phishing Blocked */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M12 11v.01" strokeWidth="3" strokeLinecap="round"/>
                 </svg>
               </div>
-              <span className="text-slate-400 text-xs font-medium">Threats</span>
+              <span className="text-slate-400 text-xs font-medium">Phishing</span>
             </div>
-            <p className="text-2xl font-bold text-white">{metrics.malwareThreats}</p>
+            <p className="text-2xl font-bold text-white">{metrics.phishingDetected}</p>
             <p className="text-xs text-slate-500 mt-1">Blocked</p>
           </div>
         </div>
@@ -773,12 +957,121 @@ const App: React.FC = () => {
         {extensionData && (
           <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl px-4 py-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">PRISM v{extensionData.version}</span>
-              <span className="text-slate-500">Phase {extensionData.phase}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-slate-400">PRISM v{extensionData.version}</span>
+                <span className="text-slate-500">Phase {extensionData.phase}</span>
+              </div>
+              {featureHealth && (
+                <button
+                  onClick={() => checkFeatureHealth()}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+                    featureHealth.allHealthy
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                  }`}
+                  title="Feature Health Check"
+                >
+                  {featureHealth.allHealthy ? '✓ All Systems OK' : `⚠ ${featureHealth.issueCount} Issues`}
+                </button>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Score Breakdown Modal */}
+      {showBreakdown && scoreBreakdown && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Score Breakdown</h3>
+                <button
+                  onClick={() => setShowBreakdown(false)}
+                  className="w-8 h-8 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Overall Score */}
+              <div className="bg-slate-700/30 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-300 font-medium">Overall Score</span>
+                  <span className="text-2xl font-bold" style={{ color: getScoreColor(scoreBreakdown.score) }}>
+                    {scoreBreakdown.score}/100
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  {scoreBreakdown.riskLevel.charAt(0).toUpperCase() + scoreBreakdown.riskLevel.slice(1)} Security
+                </div>
+              </div>
+
+              {/* Category Breakdown */}
+              <div className="space-y-3 mb-4">
+                {Object.entries(scoreBreakdown.breakdown).map(([category, data]: [string, any]) => (
+                  <div key={category} className="bg-slate-700/20 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-white capitalize">
+                        {category.replace(/([A-Z])/g, ' $1').trim()}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-400">×{data.weight}%</span>
+                        <span className="text-sm font-bold text-emerald-400">
+                          {data.weightedScore.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-slate-600/50 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-500"
+                          style={{ width: `${data.score}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-400 w-10 text-right">{data.score}/100</span>
+                    </div>
+                    {data.issues.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {data.issues.slice(0, 2).map((issue: string, idx: number) => (
+                          <div key={idx} className="text-xs text-orange-400 flex items-start gap-1">
+                            <span>•</span>
+                            <span>{issue}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Global Penalties */}
+              {scoreBreakdown.globalPenalties && scoreBreakdown.globalPenalties.length > 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+                  <div className="text-xs font-semibold text-red-400 mb-2">⚠ Critical Issues</div>
+                  <div className="space-y-1">
+                    {scoreBreakdown.globalPenalties.map((penalty: string, idx: number) => (
+                      <div key={idx} className="text-xs text-red-300">• {penalty}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top Recommendations */}
+              {scoreBreakdown.recommendations && scoreBreakdown.recommendations.length > 0 && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <div className="text-xs font-semibold text-blue-400 mb-2">💡 Recommendations</div>
+                  <div className="space-y-1">
+                    {scoreBreakdown.recommendations.slice(0, 3).map((rec: string, idx: number) => (
+                      <div key={idx} className="text-xs text-blue-300">• {rec}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

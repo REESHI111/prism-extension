@@ -33,10 +33,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [allowedWebsites, setAllowedWebsites] = useState<string[]>([]);
 
   // Load settings from storage
   useEffect(() => {
     loadSettings();
+    loadAllowedWebsites();
   }, []);
 
   const loadSettings = async () => {
@@ -47,6 +49,36 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+    }
+  };
+  
+  const loadAllowedWebsites = async () => {
+    try {
+      const result = await chrome.storage.local.get(['userWhitelist']);
+      setAllowedWebsites(result.userWhitelist || []);
+    } catch (error) {
+      console.error('Failed to load allowed websites:', error);
+    }
+  };
+  
+  const removeAllowedWebsite = async (domain: string) => {
+    try {
+      const newWhitelist = allowedWebsites.filter(d => d !== domain);
+      await chrome.storage.local.set({ userWhitelist: newWhitelist });
+      setAllowedWebsites(newWhitelist);
+    } catch (error) {
+      console.error('Failed to remove website:', error);
+    }
+  };
+  
+  const clearAllAllowedWebsites = async () => {
+    if (confirm('Are you sure you want to clear all allowed websites?')) {
+      try {
+        await chrome.storage.local.set({ userWhitelist: [] });
+        setAllowedWebsites([]);
+      } catch (error) {
+        console.error('Failed to clear allowed websites:', error);
+      }
     }
   };
 
@@ -233,6 +265,66 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                 icon="bell"
               />
             </div>
+          </div>
+
+          {/* Allowed Websites */}
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-6 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-white">Allowed Websites</h2>
+                <p className="text-xs text-slate-400 mt-1">Sites you've manually allowed</p>
+              </div>
+              {allowedWebsites.length > 0 && (
+                <button
+                  onClick={clearAllAllowedWebsites}
+                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-lg text-xs font-medium text-red-300 transition-all"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+            
+            {allowedWebsites.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-slate-700/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                  </svg>
+                </div>
+                <p className="text-sm text-slate-400">No allowed websites yet</p>
+                <p className="text-xs text-slate-500 mt-1">Websites you allow will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {allowedWebsites.map((domain) => (
+                  <div key={domain} className="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg border border-slate-600/20 hover:border-slate-500/30 transition-all">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          <path d="m9 12 2 2 4-4"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{domain}</p>
+                        <p className="text-xs text-slate-400">Always allowed</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeAllowedWebsite(domain)}
+                      className="ml-2 p-1.5 bg-slate-600/30 hover:bg-red-500/20 rounded-lg transition-all flex-shrink-0"
+                      title="Remove"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-400 hover:text-red-400">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Actions */}

@@ -3,8 +3,26 @@
  * Common tracking domains and patterns
  */
 
+// Whitelisted domains - NEVER block these legitimate services
+export const WHITELISTED_DOMAINS = [
+  'google.com',
+  'youtube.com',
+  'googleapis.com',
+  'gstatic.com',
+  'googleusercontent.com',
+  'microsoft.com',
+  'live.com',
+  'office.com',
+  'apple.com',
+  'icloud.com',
+  'amazon.com',
+  'cloudfront.net',
+  'github.com',
+  'githubusercontent.com'
+];
+
 export const TRACKER_DOMAINS = [
-  // Analytics & Tracking
+  // Analytics & Tracking (but NOT core services)
   'google-analytics.com',
   'googletagmanager.com',
   'doubleclick.net',
@@ -85,17 +103,40 @@ export const TRACKER_PATTERNS = [
   /telemetry\./i
 ];
 
+/**
+ * Extract main domain from hostname (e.g., www.google.com -> google.com)
+ */
+function getMainDomain(hostname: string): string {
+  const parts = hostname.split('.');
+  if (parts.length >= 2) {
+    return parts.slice(-2).join('.');
+  }
+  return hostname;
+}
+
 export function isTrackerDomain(url: string): boolean {
   try {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();
+    const mainDomain = getMainDomain(hostname);
     
-    // Check exact domain matches
+    // CRITICAL: Check if it's a whitelisted domain - NEVER block these
+    // Check both full hostname and main domain
+    for (const whitelist of WHITELISTED_DOMAINS) {
+      if (hostname === whitelist || 
+          hostname.endsWith('.' + whitelist) || 
+          mainDomain === whitelist) {
+        // console.log(`✅ Whitelisted (allowed): ${url}`);
+        return false; // Explicitly allow
+      }
+    }
+    
+    // Check exact domain matches for trackers
     if (TRACKER_DOMAINS.some(domain => hostname.includes(domain))) {
       return true;
     }
     
-    // Check pattern matches
+    // Check pattern matches for trackers
     if (TRACKER_PATTERNS.some(pattern => pattern.test(hostname))) {
       return true;
     }

@@ -2,85 +2,23 @@
  * PRISM Content Script
  * Phase 1: Basic Page Injection and Communication
  * Phase 3: Fingerprint Protection
- * Enhanced: Warning overlay system for unsafe websites
+ * Phase 5: ML-Powered Phishing Detection (Non-blocking)
  */
 
-import { createWarningOverlay, shouldShowWarning } from './warning-overlay';
+import { mlDetector } from '../utils/ml-phishing-detector';
 
-console.log('🔍 PRISM Content Script Loaded - Phase 3');
+console.log('🔍 PRISM Content Script Loaded - Phase 5');
 console.log('📍 Page:', window.location.href);
 
-// Inject fingerprint protection BEFORE page scripts load
+// Inject fingerprint protection script into page context
 (function injectFingerprintProtection() {
   const script = document.createElement('script');
-  script.textContent = `
-    // Canvas fingerprinting protection
-    (function() {
-      const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-      const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-      
-      const addNoise = (data) => {
-        if (!data || !data.data) return data;
-        for (let i = 0; i < data.data.length; i += 4) {
-          data.data[i] += Math.floor(Math.random() * 3) - 1;
-          data.data[i + 1] += Math.floor(Math.random() * 3) - 1;
-          data.data[i + 2] += Math.floor(Math.random() * 3) - 1;
-        }
-        return data;
-      };
-
-      HTMLCanvasElement.prototype.toDataURL = function(...args) {
-        console.log('🛡️ PRISM: Blocked canvas fingerprinting');
-        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'canvas' }, '*');
-        
-        const context = this.getContext('2d');
-        if (context) {
-          const imageData = context.getImageData(0, 0, this.width, this.height);
-          addNoise(imageData);
-          context.putImageData(imageData, 0, 0);
-        }
-        return originalToDataURL.apply(this, args);
-      };
-
-      CanvasRenderingContext2D.prototype.getImageData = function(...args) {
-        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'canvas' }, '*');
-        const imageData = originalGetImageData.apply(this, args);
-        return addNoise(imageData);
-      };
-    })();
-
-    // WebGL fingerprinting protection
-    (function() {
-      const getParameter = WebGLRenderingContext.prototype.getParameter;
-      
-      WebGLRenderingContext.prototype.getParameter = function(param) {
-        if (param === 37445 || param === 37446) {
-          console.log('🛡️ PRISM: Blocked WebGL fingerprinting');
-          window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'webgl' }, '*');
-          if (param === 37445) return 'Intel Inc.';
-          if (param === 37446) return 'Intel Iris OpenGL Engine';
-        }
-        return getParameter.call(this, param);
-      };
-    })();
-
-    // Audio fingerprinting protection
-    (function() {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      
-      const originalCreateOscillator = AudioContext.prototype.createOscillator;
-      
-      AudioContext.prototype.createOscillator = function() {
-        console.log('🛡️ PRISM: Detected audio fingerprinting');
-        window.postMessage({ type: 'PRISM_FINGERPRINT_DETECTED', method: 'audio' }, '*');
-        return originalCreateOscillator.call(this);
-      };
-    })();
-  `;
-  
+  script.src = chrome.runtime.getURL('content/fingerprint-protection.js');
+  script.onload = () => {
+    console.log('🛡️ Fingerprint protection injected');
+    script.remove();
+  };
   (document.head || document.documentElement).appendChild(script);
-  script.remove();
 })();
 
 // Listen for fingerprint detection messages
@@ -103,14 +41,37 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// Check if we should show warning overlay
+// Run ML phishing detection (non-blocking)
 const currentUrl = window.location.href;
-const warningConfig = shouldShowWarning(currentUrl);
+let mlPrediction: any = null;
 
-if (warningConfig) {
-  console.log('⚠️ [PRISM] Warning overlay triggered for:', currentUrl);
-  createWarningOverlay(warningConfig);
-}
+(async () => {
+  try {
+    mlPrediction = await mlDetector.predict(currentUrl);
+    console.log('🧠 ML Phishing Detection Result:', mlPrediction);
+    
+    // Report phishing detection to background (no page blocking)
+    if (mlPrediction.isPhishing) {
+      console.log(`⚠️ [PRISM] Phishing detected (${mlPrediction.riskLevel} risk) - Reporting only`);
+      
+      chrome.runtime.sendMessage({
+        type: 'ML_PHISHING_DETECTED',
+        url: currentUrl,
+        prediction: mlPrediction
+      }).catch(() => {});
+    } else {
+      console.log('✅ [PRISM] URL appears safe');
+      
+      chrome.runtime.sendMessage({
+        type: 'ML_URL_SAFE',
+        url: currentUrl,
+        prediction: mlPrediction
+      }).catch(() => {});
+    }
+  } catch (error) {
+    console.error('❌ [PRISM] ML detection error:', error);
+  }
+})();
 
 // Test communication with background service worker
 chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
@@ -129,35 +90,155 @@ interface PrismDebug {
   url: string;
   injectedAt: string;
   fingerprintDetections: number;
-  showWarning?: (config?: any) => void;
+  mlPrediction?: any;
 }
 
 (window as any).PRISM = {
   version: '1.0.0',
   active: true,
-  phase: 3,
+  phase: 5,
   url: window.location.href,
   injectedAt: new Date().toISOString(),
   get fingerprintDetections() {
     return fingerprintDetections;
   },
-  // Allow manual triggering of warning overlay for testing
-  showWarning: (config?: any) => {
-    const testConfig = config || {
-      type: 'phishing',
-      severity: 'high',
-      domain: window.location.hostname,
-      reasons: [
-        'This is a test warning',
-        'Triggered manually for demonstration',
-        'Real detection will be implemented in Phase 5'
-      ],
-      canProceed: true
-    };
-    console.log('🧪 [PRISM] Manually showing warning overlay');
-    createWarningOverlay(testConfig);
+  get mlPrediction() {
+    return mlPrediction;
   }
 } as PrismDebug;
+
+// Warning overlay creation with detailed threat information
+function createWarningOverlay(reason: string, details: any): HTMLDivElement {
+  const overlay = document.createElement('div');
+  overlay.id = 'prism-warning-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(220, 38, 38, 0.95);
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow-y: auto;
+  `;
+  
+  const harmLevelColors = {
+    'Critical': '#dc2626',
+    'High': '#ea580c',
+    'Medium': '#f59e0b'
+  };
+  
+  const harmLevelColor = details?.harmLevel ? harmLevelColors[details.harmLevel] : '#dc2626';
+  
+  // Build threats list HTML
+  let threatsHTML = '';
+  if (details?.threats && details.threats.length > 0) {
+    threatsHTML = `
+      <div id="threat-details" style="
+        display: none;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        text-align: left;
+        max-height: 300px;
+        overflow-y: auto;
+      ">
+        <h3 style="font-size: 18px; margin-bottom: 15px; text-align: center;">Detected Threats</h3>
+        ${details.threats.map((threat: any, index: number) => `
+          <div style="
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid ${harmLevelColor};
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+          ">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 6px;">🚨 ${threat.name}</div>
+            <div style="font-size: 14px; margin-bottom: 4px; opacity: 0.9;">
+              <strong>Purpose:</strong> ${threat.purpose}
+            </div>
+            <div style="font-size: 14px; opacity: 0.9;">
+              <strong>Target:</strong> ${threat.target}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  overlay.innerHTML = `
+    <div style="text-align: center; max-width: 700px; padding: 40px; margin: 20px;">
+      <div style="font-size: 72px; margin-bottom: 20px;">⚠️</div>
+      <h1 style="font-size: 32px; margin-bottom: 10px; font-weight: bold;">Security Warning</h1>
+      ${details ? `
+        <div style="
+          display: inline-block;
+          background: ${harmLevelColor};
+          color: white;
+          padding: 6px 16px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: bold;
+          margin-bottom: 20px;
+        ">
+          ${details.harmLevel} Risk - ${details.type}
+        </div>
+      ` : ''}
+      <p style="font-size: 18px; margin-bottom: 20px; line-height: 1.5;">${reason}</p>
+      ${details?.count ? `
+        <div style="font-size: 16px; opacity: 0.9; margin-bottom: 20px;">
+          ${details.count} threat${details.count > 1 ? 's' : ''} detected on this page
+        </div>
+      ` : ''}
+      ${threatsHTML}
+      ${details?.threats && details.threats.length > 0 ? `
+        <button id="show-more-btn" style="
+          background: rgba(255, 255, 255, 0.2);
+          color: white;
+          border: 2px solid white;
+          padding: 10px 20px;
+          font-size: 14px;
+          font-weight: bold;
+          border-radius: 8px;
+          cursor: pointer;
+          margin-bottom: 20px;
+          transition: all 0.3s;
+        ">Show More Details</button>
+      ` : ''}
+      <div style="display: flex; gap: 20px; justify-content: center; margin-top: 10px;">
+        <button id="prism-proceed" style="
+          background: white;
+          color: #dc2626;
+          border: none;
+          padding: 12px 24px;
+          font-size: 16px;
+          font-weight: bold;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s;
+        ">Proceed Anyway</button>
+        <button id="prism-goback" style="
+          background: transparent;
+          color: white;
+          border: 2px solid white;
+          padding: 12px 24px;
+          font-size: 16px;
+          font-weight: bold;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s;
+        ">Go Back (Recommended)</button>
+      </div>
+    </div>
+  `;
+  
+  return overlay;
+}
 
 // Listen for messages from background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -174,18 +255,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           domain: window.location.hostname,
           protocol: window.location.protocol,
           readyState: document.readyState,
-          fingerprintDetections
+          fingerprintDetections,
+          mlPrediction
         }
       });
       break;
 
     case 'SHOW_WARNING':
-      // Show warning overlay on demand
-      if (message.config) {
-        createWarningOverlay(message.config);
-        sendResponse({ status: 'OK', message: 'Warning displayed' });
-      } else {
-        sendResponse({ status: 'ERROR', message: 'No config provided' });
+      // Show harmful activity warning
+      if (message.payload?.reason) {
+        // Remove existing overlay if present
+        const existing = document.getElementById('prism-warning-overlay');
+        if (existing) existing.remove();
+        
+        // Create and show warning overlay with details
+        const overlay = createWarningOverlay(message.payload.reason, message.payload.details);
+        document.body.appendChild(overlay);
+        
+        // Show More button handler
+        const showMoreBtn = document.getElementById('show-more-btn');
+        const threatDetails = document.getElementById('threat-details');
+        if (showMoreBtn && threatDetails) {
+          showMoreBtn.addEventListener('click', () => {
+            if (threatDetails.style.display === 'none') {
+              threatDetails.style.display = 'block';
+              showMoreBtn.textContent = 'Show Less';
+            } else {
+              threatDetails.style.display = 'none';
+              showMoreBtn.textContent = 'Show More Details';
+            }
+          });
+        }
+        
+        // Button handlers
+        document.getElementById('prism-proceed')?.addEventListener('click', () => {
+          overlay.remove();
+        });
+        
+        document.getElementById('prism-goback')?.addEventListener('click', () => {
+          window.history.back();
+        });
+        
+        console.warn('⚠️ PRISM Warning displayed:', message.payload.reason);
+        sendResponse({ status: 'OK', shown: true });
       }
       break;
 
@@ -252,7 +364,9 @@ window.addEventListener('load', () => {
 });
 
 // Log successful injection
-console.log('✅ PRISM Content Script Ready - Phase 3');
+console.log('✅ PRISM Content Script Ready - Phase 5');
 console.log('🛡️ Fingerprint protection active');
+console.log('🧠 ML phishing detection active');
+console.log('🧪 Test: window.PRISM.mlPrediction');
 console.log('🧪 Test: window.PRISM.fingerprintDetections');
 

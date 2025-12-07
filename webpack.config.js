@@ -7,6 +7,7 @@ module.exports = {
   entry: {
     'background/service-worker': './src/background/service-worker.ts',
     'content/content-script': './src/content/content-script.ts',
+    'content/fingerprint-protection': './src/content/fingerprint-protection.ts',
     'popup': './src/popup/index.tsx',
   },
   output: {
@@ -42,6 +43,7 @@ module.exports = {
       patterns: [
         { from: 'public/manifest.json', to: 'manifest.json' },
         { from: 'public/*.png', to: '[name][ext]' },
+        { from: 'public/ml', to: 'ml' },
       ],
     }),
   ],

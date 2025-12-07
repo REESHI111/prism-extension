@@ -2,6 +2,7 @@
  * PRISM Background Service Worker
  * Phase 2: Real Tracker Blocking & Statistics
  * Phase 3: Fingerprint Detection Tracking
+ * Phase 5: ML Phishing Detection
  */
 
 import { StatsManager } from '../utils/stats-manager';
@@ -9,7 +10,7 @@ import { HistoryTracker } from '../utils/history-tracker';
 import { TrustManager } from '../utils/trust-manager';
 import { isTrackerDomain, getTrackerCategory } from '../utils/enhanced-tracker-database';
 
-console.log('🛡️ PRISM Service Worker Loaded - Phase 3');
+console.log('🛡️ PRISM Service Worker Loaded - Phase 5');
 
 const stats = StatsManager.getInstance();
 const history = HistoryTracker.getInstance();
@@ -18,10 +19,21 @@ const trust = TrustManager.getInstance();
 // Track fingerprint attempts per domain
 const fingerprintAttempts = new Map<string, Map<string, number>>();
 
+// Track ML phishing detections per domain
+const mlPhishingDetections = new Map<string, {
+  url: string;
+  confidence: number;
+  riskLevel: string;
+  timestamp: number;
+  count: number;
+}>();
+
 // Track blocked requests per tab
 const tabBlockedRequests = new Map<number, Set<string>>();
 const tabCookieCounts = new Map<number, number>();
 const tabThirdPartyDomains = new Map<number, Set<string>>();
+const tabRequestCounts = new Map<number, { total: number; thirdParty: number }>();
+const tabUniqueRequests = new Map<number, Set<string>>(); // Deduplicate requests
 
 // Real-time tracking variables
 const cookieCheckInterval = 2000; // Check cookies every 2 seconds
@@ -52,12 +64,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('✅ PRISM Extension Installed - Phase 3');
+  console.log('✅ PRISM Extension Installed - Phase 5');
   
   chrome.storage.local.set({
     extensionActive: true,
     version: '1.0.0',
-    phase: 3,
+    phase: 5, // Phase 5: ML-Powered Threat Detection
     installDate: new Date().toISOString()
   });
   
@@ -73,6 +85,9 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Temporary bypass for manually allowed blocked sites
+const bypassedSites = new Set<string>();
+
 // Block tracking requests
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
@@ -82,6 +97,14 @@ chrome.webRequest.onBeforeRequest.addListener(
     if (!blockingEnabled || !extensionEnabled) {
       return { cancel: false }; // Don't block if disabled
     }
+    
+    // Check if site is temporarily bypassed
+    try {
+      const urlObj = new URL(url);
+      if (bypassedSites.has(urlObj.hostname)) {
+        return { cancel: false }; // Allow bypassed sites
+      }
+    } catch (e) {}
     
     // Check if URL is a tracker
     if (isTrackerDomain(url)) {
@@ -124,7 +147,17 @@ chrome.webRequest.onBeforeRequest.addListener(
   ['blocking']
 );
 
-// Monitor ALL requests for real-time analysis
+// Warning overlay injection function
+function showWarningOverlay(tabId: number, reason: string) {
+  chrome.tabs.sendMessage(tabId, {
+    type: 'SHOW_WARNING',
+    payload: { reason }
+  }).catch(() => {
+    // Content script not ready yet, will check on tab load
+  });
+}
+
+// Monitor IMPORTANT requests for real-time analysis (not every pixel/icon)
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     const { tabId, url, type } = details;
@@ -141,8 +174,45 @@ chrome.webRequest.onBeforeRequest.addListener(
               const tabUrl = new URL(tab.url);
               const tabDomain = tabUrl.hostname;
               
-              // Increment requests analyzed
-              stats.incrementRequestAnalyzed(tabDomain);
+              // Only count meaningful requests (not images, fonts, icons, media)
+              const meaningfulTypes = ['main_frame', 'sub_frame', 'script', 'xmlhttprequest', 'fetch'];
+              if (meaningfulTypes.includes(type)) {
+                // Initialize unique request tracker for this tab
+                if (!tabUniqueRequests.has(tabId)) {
+                  tabUniqueRequests.set(tabId, new Set());
+                }
+                
+                // Normalize URL to prevent query param duplicates (keep base URL + path)
+                const normalizedUrl = `${requestUrl.origin}${requestUrl.pathname}`;
+                const uniqueRequests = tabUniqueRequests.get(tabId)!;
+                
+                // Only count if this is a NEW unique request
+                if (!uniqueRequests.has(normalizedUrl)) {
+                  uniqueRequests.add(normalizedUrl);
+                  
+                  // Initialize request counts
+                  if (!tabRequestCounts.has(tabId)) {
+                    tabRequestCounts.set(tabId, { total: 0, thirdParty: 0 });
+                  }
+                  const counts = tabRequestCounts.get(tabId)!;
+                  
+                  // Cap at 500 unique requests per session (prevent inflation from infinite scroll)
+                  if (counts.total < 500) {
+                    counts.total++;
+                    
+                    // Count third-party requests
+                    if (requestDomain !== tabDomain && !requestDomain.includes(tabDomain)) {
+                      counts.thirdParty++;
+                    }
+                    
+                    // Update stats with request metrics
+                    stats.updateRequestMetrics(tabDomain, counts.total, counts.thirdParty);
+                  }
+                }
+                
+                // Still track for informational purposes (no cap on this)
+                stats.incrementRequestAnalyzed(tabDomain);
+              }
               
               // Track third-party domains
               if (requestDomain !== tabDomain && !requestDomain.includes(tabDomain)) {
@@ -150,11 +220,15 @@ chrome.webRequest.onBeforeRequest.addListener(
                   tabThirdPartyDomains.set(tabId, new Set());
                 }
                 tabThirdPartyDomains.get(tabId)!.add(requestDomain);
-                
-                // Update third-party script count
-                if (type === 'script') {
-                  stats.updateThirdPartyScripts(tabDomain, tabThirdPartyDomains.get(tabId)!.size);
-                }
+              }
+              
+              // Update third-party script count ONLY for scripts (REAL count)
+              if (type === 'script' && requestDomain !== tabDomain && !requestDomain.includes(tabDomain)) {
+                const thirdPartyCount = Array.from(tabThirdPartyDomains.get(tabId) || []).filter(domain => {
+                  // Count unique third-party domains
+                  return domain !== tabDomain && !domain.includes(tabDomain);
+                }).length;
+                stats.updateThirdPartyScripts(tabDomain, thirdPartyCount);
               }
               
               // Check for mixed content
@@ -182,8 +256,25 @@ function updateCookieCount() {
     if (cookieCount !== previousCount) {
       tabCookieCounts.set(currentTabId!, cookieCount);
       
-      // Update stats with actual cookie count
-      stats.updateCookieCount(currentDomain!, cookieCount);
+      // Analyze cookie security attributes
+      const secureCookies = cookies.filter(c => c.secure).length;
+      const httpOnlyCookies = cookies.filter(c => c.httpOnly).length;
+      const sameSiteCookies = cookies.filter(c => c.sameSite && c.sameSite !== 'no_restriction').length;
+      
+      // Detect third-party cookies (domain doesn't match current domain)
+      const thirdPartyCookies = cookies.filter(c => {
+        const cookieDomain = c.domain.replace(/^\./, ''); // Remove leading dot
+        return !currentDomain!.includes(cookieDomain) && !cookieDomain.includes(currentDomain!);
+      }).length;
+      
+      // Update stats with enhanced cookie metrics
+      stats.updateEnhancedCookieMetrics(currentDomain!, {
+        total: cookieCount,
+        secure: secureCookies,
+        httpOnly: httpOnlyCookies,
+        sameSite: sameSiteCookies,
+        thirdParty: thirdPartyCookies
+      });
       
       // Notify popup of change
       chrome.runtime.sendMessage({
@@ -244,9 +335,23 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       
       // Reset third-party tracking for new page
       tabThirdPartyDomains.delete(tabId);
+      tabRequestCounts.delete(tabId);
+      tabUniqueRequests.delete(tabId); // Reset unique request tracking on navigation
       
       // Count cookies immediately
       updateCookieCount();
+      
+      // Auto-launch popup for 3 seconds on page load (only for regular websites)
+      if (url.protocol === 'https:' || url.protocol === 'http:') {
+        // Mark as auto-opened so popup knows to auto-close
+        chrome.storage.local.set({ autoOpened: true, autoOpenTime: Date.now() }, () => {
+          // Open popup using action API
+          chrome.action.openPopup().catch(() => {
+            // Silently fail if popup can't be opened (e.g., user is interacting with page)
+            console.log('Could not auto-open popup (user may be busy)');
+          });
+        });
+      }
     } catch (e) {}
   }
 });
@@ -256,6 +361,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabBlockedRequests.delete(tabId);
   tabCookieCounts.delete(tabId);
   tabThirdPartyDomains.delete(tabId);
+  tabRequestCounts.delete(tabId);
+  tabUniqueRequests.delete(tabId); // Clean up unique request tracking
   
   if (currentTabId === tabId) {
     currentTabId = null;
@@ -268,6 +375,91 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Message received:', message.type);
 
   switch (message.type) {
+    case 'ML_PHISHING_DETECTED':
+      // Track ML phishing detection
+      {
+        const { url, prediction, severity } = message;
+        try {
+          const domain = new URL(url).hostname;
+          
+          // Store detection
+          const existing = mlPhishingDetections.get(domain);
+          mlPhishingDetections.set(domain, {
+            url,
+            confidence: prediction.confidence,
+            riskLevel: prediction.riskLevel,
+            timestamp: Date.now(),
+            count: existing ? existing.count + 1 : 1
+          });
+          
+          console.log(`🧠 ML Phishing detected: ${domain} (${(prediction.confidence * 100).toFixed(1)}%)`);
+          console.log(`   Risk Level: ${prediction.riskLevel}`);
+          console.log(`   Reason: ${prediction.blockedReason || 'Multiple suspicious patterns'}`);
+          
+          // Add detailed threat information (prevents duplicates)
+          stats.addThreatDetail(domain, {
+            id: `ml-phishing-${domain}`,
+            type: 'Phishing',
+            name: `Potential Phishing Site (${prediction.riskLevel} Risk)`,
+            description: prediction.blockedReason || 'Multiple suspicious URL patterns detected'
+          });
+          
+          // Store in chrome storage for persistence
+          chrome.storage.local.get(['mlDetections'], (result) => {
+            const detections = result.mlDetections || {};
+            detections[domain] = {
+              url,
+              confidence: prediction.confidence,
+              riskLevel: prediction.riskLevel,
+              timestamp: Date.now(),
+              features: prediction.features
+            };
+            
+            chrome.storage.local.set({ mlDetections: detections });
+          });
+          
+          sendResponse({ status: 'OK', message: 'Phishing detection recorded' });
+        } catch (error) {
+          console.error('Error processing ML detection:', error);
+          sendResponse({ status: 'ERROR', message: 'Invalid URL' });
+        }
+      }
+      break;
+
+    case 'ML_URL_SAFE':
+      // Track safe URL
+      {
+        const { url, prediction } = message;
+        try {
+          const domain = new URL(url).hostname;
+          console.log(`✅ ML: ${domain} appears safe (${(prediction.confidence * 100).toFixed(1)}% phishing probability)`);
+          sendResponse({ status: 'OK' });
+        } catch (error) {
+          sendResponse({ status: 'ERROR', message: 'Invalid URL' });
+        }
+      }
+      break;
+
+    case 'GET_ML_DETECTIONS':
+      // Get ML phishing detections for a domain
+      {
+        const { domain } = message;
+        const detection = mlPhishingDetections.get(domain);
+        
+        if (detection) {
+          sendResponse({
+            status: 'OK',
+            data: detection
+          });
+        } else {
+          sendResponse({
+            status: 'OK',
+            data: null
+          });
+        }
+      }
+      break;
+
     case 'PING':
       sendResponse({ status: 'OK', message: 'Service worker active' });
       break;
@@ -311,7 +503,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'FINGERPRINT_DETECTED':
-      // Track fingerprint detection attempts
+      // Track fingerprint detection attempts (HIGH severity - no warning overlay)
       const { domain, method } = message;
       if (!fingerprintAttempts.has(domain)) {
         fingerprintAttempts.set(domain, new Map());
@@ -321,8 +513,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       console.log(`🛡️ Fingerprint blocked: ${method} on ${domain}`);
       
-      // Increment both threat and fingerprint counters
-      stats.incrementThreatDetected(domain);
+      // Only increment fingerprint counter (NOT threatsDetected)
+      // Fingerprinting is HIGH severity - tracked silently, no overlay
       stats.incrementFingerprintAttempt(domain);
       
       sendResponse({ status: 'OK' });
@@ -344,8 +536,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.cookies.getAll({ domain: siteDomain }, (cookies) => {
           const actualCookieCount = cookies.length;
           
-          // Update stats with real cookie count
-          stats.updateCookieCount(siteDomain, actualCookieCount);
+          // Analyze cookie security attributes
+          const secureCookies = cookies.filter(c => c.secure).length;
+          const httpOnlyCookies = cookies.filter(c => c.httpOnly).length;
+          const sameSiteCookies = cookies.filter(c => c.sameSite && c.sameSite !== 'no_restriction').length;
+          const thirdPartyCookies = cookies.filter(c => {
+            const cookieDomain = c.domain.replace(/^\./, '');
+            return !siteDomain.includes(cookieDomain) && !cookieDomain.includes(siteDomain);
+          }).length;
+          
+          // Update stats with enhanced cookie metrics
+          stats.updateEnhancedCookieMetrics(siteDomain, {
+            total: actualCookieCount,
+            secure: secureCookies,
+            httpOnly: httpOnlyCookies,
+            sameSite: sameSiteCookies,
+            thirdParty: thirdPartyCookies
+          });
           
           // Get updated stats
           const siteStats = stats.getSiteStats(siteDomain);
@@ -359,7 +566,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
           
-          // If we have stored stats, use them; otherwise return defaults
+          // If we have stored stats, use them; otherwise create new stats with calculated score
           if (siteStats) {
             sendResponse({
               status: 'OK',
@@ -370,18 +577,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               }
             });
           } else {
-            // No stats yet for this site - return clean slate with real cookie count
+            // No stats yet for this site - initialize with real-time data
+            // Calculate proper security score based on available data instead of defaulting to 100
+            const initialData = {
+              domain: siteDomain,
+              trackersBlocked: 0,
+              cookiesBlocked: actualCookieCount,
+              fingerprintAttempts: totalFingerprints,
+              requestsAnalyzed: 0,
+              threatsDetected: 0,
+              hasSSL: true, // Will be updated from tab info
+              privacyPolicyFound: false,
+              thirdPartyScripts: 0,
+              mixedContent: false,
+              protocol: 'https:'
+            };
+            
+            // Calculate proper security score based on cookies, fingerprints, etc.
+            const calculatedScore = stats.calculateScoreForSite(initialData);
+            
             sendResponse({
               status: 'OK',
               data: {
-                domain: siteDomain,
-                trackersBlocked: 0,
-                cookiesBlocked: actualCookieCount,
-                requestsAnalyzed: 0,
-                threatsDetected: 0,
-                securityScore: 100,
-                timestamp: Date.now(),
-                fingerprintAttempts: totalFingerprints
+                ...initialData,
+                securityScore: calculatedScore,
+                timestamp: Date.now()
               }
             });
           }
@@ -488,6 +708,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ status: 'OK' });
       break;
 
+    case 'BYPASS_BLOCKED_SITE':
+      // Temporarily allow access to a blocked site
+      if (message.domain) {
+        bypassedSites.add(message.domain);
+        console.log(`✅ Temporarily bypassed: ${message.domain}`);
+        sendResponse({ status: 'OK', message: 'Site access granted' });
+      } else {
+        sendResponse({ status: 'ERROR', message: 'No domain provided' });
+      }
+      break;
+
+    case 'REMOVE_BYPASS':
+      // Remove bypass for a site
+      if (message.domain) {
+        bypassedSites.delete(message.domain);
+        console.log(`🚫 Removed bypass for: ${message.domain}`);
+        sendResponse({ status: 'OK', message: 'Bypass removed' });
+      }
+      break;
+
     case 'ADD_BLOCKED_SITE':
       trust.addBlockedSite(message.domain, message.reason);
       sendResponse({ status: 'OK' });
@@ -526,6 +766,126 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       fingerprintAttempts.delete(message.domain);
       sendResponse({ status: 'OK' });
       break;
+
+    case 'CHECK_FEATURE_HEALTH':
+      // Run comprehensive feature health check
+      (async () => {
+        try {
+          const { FeatureHealthChecker } = await import('../utils/feature-health-checker');
+          const checker = FeatureHealthChecker.getInstance();
+          const report = await checker.checkAllFeatures();
+          sendResponse({ status: 'OK', data: report });
+        } catch (error) {
+          console.error('Feature health check failed:', error);
+          sendResponse({ 
+            status: 'ERROR', 
+            data: { 
+              allHealthy: false, 
+              issueCount: 1, 
+              features: [], 
+              timestamp: Date.now() 
+            } 
+          });
+        }
+      })();
+      return true;  // Async response
+
+    case 'GET_SCORE_BREAKDOWN':
+      // Get detailed score breakdown for a domain
+      (async () => {
+        try {
+          const domain = message.domain;
+          if (!domain) {
+            sendResponse({ status: 'ERROR', message: 'No domain provided' });
+            return;
+          }
+
+          const siteStats = stats.getSiteStats(domain);
+          if (!siteStats) {
+            sendResponse({ status: 'ERROR', message: 'No stats found for domain' });
+            return;
+          }
+
+          // Get current tab URL for context
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          const url = tabs[0]?.url || `https://${domain}`;
+
+          // Calculate score breakdown using enhanced privacy scorer
+          const { EnhancedPrivacyScorer } = await import('../utils/enhanced-privacy-scorer');
+          const scorer = EnhancedPrivacyScorer.getInstance();
+
+          const factors = {
+            // Trackers
+            trackersBlocked: siteStats.trackersBlocked || 0,
+            trackerVendors: siteStats.trackerVendors || [],
+            fingerprintAttempts: siteStats.fingerprintAttempts || 0,
+            
+            // Cookies (use SAME mapping as stats-manager)
+            cookiesManaged: siteStats.cookiesBlocked || 0,
+            secureCookies: siteStats.secureCookies || 0,
+            httpOnlyCookies: siteStats.httpOnlyCookies || 0,
+            sameSiteCookies: siteStats.sameSiteCookies || 0,
+            thirdPartyCookies: siteStats.thirdPartyCookies || 0,
+            
+            // Requests
+            totalRequests: siteStats.totalRequests || siteStats.requestsAnalyzed || 0,
+            thirdPartyRequests: siteStats.thirdPartyRequests || 0,
+            mixedContent: siteStats.mixedContent || false,
+            
+            // ML Check (defaults assume safe)
+            threatsDetected: siteStats.threatsDetected || 0,
+            threatDetails: siteStats.threatDetails || [],
+            domainAge: siteStats.domainAge || 365,
+            
+            // SSL (default: assume HTTPS with strong TLS)
+            hasSSL: siteStats.hasSSL ?? true,
+            sslStrength: siteStats.sslStrength || 'strong' as const,
+            sslExpired: siteStats.sslExpiry ? siteStats.sslExpiry < Date.now() : false,
+            
+            // Privacy Policy
+            hasPrivacyPolicy: siteStats.privacyPolicyFound || false,
+            privacyPolicyAccessible: siteStats.privacyPolicyFound || false,
+            
+            // Third-party Scripts
+            thirdPartyScripts: siteStats.thirdPartyScripts || 0,
+            inlineScripts: 0,
+            
+            // Data Collection
+            formsDetected: siteStats.formsWithPII || 0,
+            autofillDisabled: false,
+            piiCollected: siteStats.piiInQueryParams || siteStats.insecureFormSubmit || false
+          };
+
+          const privacyScore = scorer.calculateScore(factors, url);
+
+          // Check for harmful activity and trigger warning
+          const warningCheck = scorer.shouldShowWarning(factors);
+          if (warningCheck.show && tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: 'SHOW_WARNING',
+              payload: { 
+                reason: warningCheck.reason,
+                details: warningCheck.details
+              }
+            }).catch(() => {
+              console.warn('Could not send warning - content script may not be loaded yet');
+            });
+            console.warn(`⚠️ HARMFUL ACTIVITY on ${domain}: ${warningCheck.reason}`);
+          }
+
+          sendResponse({
+            status: 'OK',
+            data: {
+              ...privacyScore,
+              warning: warningCheck
+            }
+          });
+        } catch (error) {
+          console.error('Failed to get score breakdown:', error);
+          sendResponse({ status: 'ERROR', message: 'Failed to calculate breakdown' });
+        }
+      })();
+      return true;  // Async response
 
     default:
       sendResponse({ status: 'ERROR', message: 'Unknown message type' });
