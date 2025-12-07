@@ -65,12 +65,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 // Initialize extension state
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('✅ PRISM Extension Installed - Phase 5');
+  console.log('✅ PRISM Extension Installed - Phase 7');
   
   chrome.storage.local.set({
     extensionActive: true,
-    version: '1.0.0',
-    phase: 5, // Phase 5: ML-Powered Threat Detection
+    version: '1.1.1',
+    phase: 7, // Phase 7: Enhanced ML & Score Sync
     installDate: new Date().toISOString()
   });
   
@@ -352,6 +352,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         // Analyze with ML model
         const detector = await getMLDetector();
         const prediction = detector.classify(changeInfo.url);
+        console.log(`🔍 ML Prediction: ${prediction.isPhishing ? 'PHISHING' : 'SAFE'} | Confidence: ${(prediction.confidence * 100).toFixed(1)}%`);
+        
         const mlResult = {
           url: changeInfo.url,
           is_phishing: prediction.isPhishing,
@@ -543,8 +545,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           status: 'OK',
           data: {
             active: result.extensionActive ?? true,
-            version: result.version ?? '1.0.0',
-            phase: result.phase ?? 3,
+            version: result.version ?? '1.1.1',
+            phase: result.phase ?? 7,
             installDate: result.installDate
           }
         });

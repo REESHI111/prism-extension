@@ -352,10 +352,50 @@ class MLPhishingDetector {
   }
   
   /**
+   * Check if domain is random/gibberish (7+ consecutive meaningless characters)
+   */
+  private isRandomDomain(url: string): boolean {
+    try {
+      const parsed = new URL(url.startsWith('http') ? url : 'http://' + url);
+      const domain = parsed.hostname;
+      const domainParts = domain.split('.');
+      const mainDomain = domainParts.length >= 2 ? domainParts[domainParts.length - 2] : domain;
+      
+      // Check for 7+ consecutive consonants (random gibberish)
+      if (/[bcdfghjklmnpqrstvwxyz]{7,}/i.test(mainDomain)) {
+        return true;
+      }
+      
+      // Check for very low vowel ratio (< 20%) in domains longer than 7 chars
+      if (mainDomain.length >= 7) {
+        const vowels = (mainDomain.match(/[aeiou]/gi) || []).length;
+        const vowelRatio = vowels / mainDomain.length;
+        if (vowelRatio < 0.2) {
+          return true;
+        }
+      }
+      
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Classify URL as phishing or safe
    */
   classify(url: string): { isPhishing: boolean; confidence: number } {
+    // Check for random/gibberish domain first
+    if (this.isRandomDomain(url)) {
+      console.log(`🎲 [ML] Random/gibberish domain detected: ${url} → 50% risk`);
+      return {
+        isPhishing: true,
+        confidence: 0.5  // 50% risk for random domains
+      };
+    }
+    
     const confidence = this.predict(url);
+    console.log(`🧠 [ML] Standard prediction: ${url} → ${(confidence * 100).toFixed(1)}% risk`);
     return {
       isPhishing: confidence >= 0.5,
       confidence: confidence

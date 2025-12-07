@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Random Domain Detection - PRISM v1.1.1</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 30px; 
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white; 
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 { 
+            background: linear-gradient(to right, #10b981, #14b8a6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        .version {
+            color: #64748b;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+        }
+        .test-section h2 {
+            color: #10b981;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .url-test {
+            background: rgba(15, 23, 42, 0.8);
+            border-left: 3px solid #10b981;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+        }
+        .expected {
+            color: #fbbf24;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .instructions {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .instructions h3 {
+            color: #10b981;
+            margin-top: 0;
+        }
+        code {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #22d3ee;
+        }
+        .note {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .note h3 {
+            color: #ef4444;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎲 Random Domain Detection Test</h1>
+    <p class="version">PRISM Extension v1.1.1 - Phase 7</p>
+
+    <div class="instructions">
+        <h3>📋 How to Test:</h3>
+        <ol>
+            <li>Reload PRISM extension in <code>chrome://extensions/</code></li>
+            <li>Click on any URL below to visit it (they won't load, that's OK)</li>
+            <li>Open PRISM popup immediately</li>
+            <li>Check the <strong>AI Phishing Analysis</strong> section</li>
+            <li>Verify the risk score matches the expected value</li>
+            <li>Open browser console (F12) to see detection logs</li>
+        </ol>
+    </div>
+
+    <div class="note">
+        <h3>⚠️ Important:</h3>
+        <p><strong>Console Logs to Look For:</strong></p>
+        <ul>
+            <li><code>🎲 [ML] Random/gibberish domain detected: ... → 50% risk</code></li>
+            <li><code>🧠 [ML] Standard prediction: ... → X% risk</code></li>
+            <li><code>🔍 ML Prediction: PHISHING | Confidence: 50.0%</code> (for random domains)</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ Random/Gibberish Domains (Should show 50% risk)</h2>
+        
+        <div class="url-test">
+            <a href="http://dcsdvsdvsdwvv.com" style="color: #22d3ee; text-decoration: none;">
+                http://dcsdvsdvsdwvv.com
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (7+ consonants: dcsdvsdvsdwvv)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="http://qwrtypsdfg.com" style="color: #22d3ee; text-decoration: none;">
+                http://qwrtypsdfg.com
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (7+ consonants: qwrtypsdfg)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="https://kjhgfdswqerty.net" style="color: #22d3ee; text-decoration: none;">
+                https://kjhgfdswqerty.net
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (7+ consonants: kjhgfdswqerty)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="http://asdfghjkl.tk" style="color: #22d3ee; text-decoration: none;">
+                http://asdfghjkl.tk
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (7+ consonants + suspicious TLD)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="https://zxcvbnmqw.xyz" style="color: #22d3ee; text-decoration: none;">
+                https://zxcvbnmqw.xyz
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (7+ consonants + suspicious TLD)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="http://mnbvcxzlkjh.com" style="color: #22d3ee; text-decoration: none;">
+                http://mnbvcxzlkjh.com
+            </a>
+            <div class="expected">Expected: MEDIUM risk, 50% confidence (low vowel ratio: 0%)</div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Typosquatting Domains (Should use normal ML - ~99% risk)</h2>
+        
+        <div class="url-test">
+            <a href="http://faceb00k.com" style="color: #22d3ee; text-decoration: none;">
+                http://faceb00k.com
+            </a>
+            <div class="expected">Expected: CRITICAL risk, ~99% confidence (digit substitution detected)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="http://g00gle.com" style="color: #22d3ee; text-decoration: none;">
+                http://g00gle.com
+            </a>
+            <div class="expected">Expected: CRITICAL risk, ~99% confidence (digit substitution detected)</div>
+        </div>
+
+        <div class="url-test">
+            <a href="http://paypa1.com" style="color: #22d3ee; text-decoration: none;">
+                http://paypa1.com
+            </a>
+            <div class="expected">Expected: CRITICAL risk, ~99% confidence (digit substitution detected)</div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>✅ Legitimate Domains (Should show SAFE - low risk)</h2>
+        
+        <div class="url-test">
+            <a href="https://google.com" style="color: #22d3ee; text-decoration: none;">
+                https://google.com
+            </a>
+            <div class="expected">Expected: SAFE risk, ~5-10% confidence</div>
+        </div>
+
+        <div class="url-test">
+            <a href="https://facebook.com" style="color: #22d3ee; text-decoration: none;">
+                https://facebook.com
+            </a>
+            <div class="expected">Expected: SAFE risk, ~5-10% confidence</div>
+        </div>
+
+        <div class="url-test">
+            <a href="https://amazon.com" style="color: #22d3ee; text-decoration: none;">
+                https://amazon.com
+            </a>
+            <div class="expected">Expected: SAFE risk, ~5-10% confidence</div>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <h3>🎯 What Should Happen:</h3>
+        <ul>
+            <li><strong>Random domains</strong>: ML detector should log "Random/gibberish domain detected"</li>
+            <li><strong>Console output</strong>: Shows 50.0% confidence immediately</li>
+            <li><strong>Popup display</strong>: Shows MEDIUM risk level with 50% score</li>
+            <li><strong>Typosquatting</strong>: Uses full ML model, shows ~99% risk</li>
+            <li><strong>Legitimate</strong>: Uses full ML model, shows ~5-10% risk</li>
+        </ul>
+    </div>
+
+    <div class="test-section" style="border-color: rgba(16, 185, 129, 0.4);">
+        <h2>🎨 New Tab Design Check:</h2>
+        <p>When you're on this page or any chrome:// page:</p>
+        <ul>
+            <li>✅ Logo should be the PRISM icon (not a shield icon)</li>
+            <li>✅ Colors should be emerald green (not purple/indigo)</li>
+            <li>✅ Should show "v1.1.1 • Phase 7"</li>
+            <li>✅ Status should have green glow effect</li>
+            <li>✅ Border should be emerald green</li>
+        </ul>
+    </div>
+
+</body>
+</html>

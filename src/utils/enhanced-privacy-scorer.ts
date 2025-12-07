@@ -437,7 +437,7 @@ export class EnhancedPrivacyScorer {
     let score = 100;
 
     if (!hasPolicy) {
-      score = 50;  // Increased from 30 (less harsh)
+      score = 0;  // No privacy policy = 0 score
       issues.push('No privacy policy found');
       recommendations.push('Look for privacy policy');
     } else if (!accessible) {

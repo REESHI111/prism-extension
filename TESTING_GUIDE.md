@@ -198,3 +198,24 @@ When you see these scores, everything is working perfectly:
 ```
 
 **Your ML phishing detector is now production-ready!** 🚀
+
+
+✅ Legitimate Sites (Should be GREEN):
+
+https://www.google.com/search?q=test
+https://www.amazon.com/products
+https://github.com/user/repo
+https://stackoverflow.com/questions
+---------------
+🚨 Phishing Sites (Should be RED):
+
+http://g00gle-verify.tk/login
+http://faceb00k-security.com/verify
+http://paypal.secure-account.xyz/update
+http://192.168.1.1/admin/login.php
+-------------------
+⚠️ Suspicious Sites (Should be YELLOW):
+
+http://paypal.evil-site.xyz/login
+https://verify-account-urgent.tk/login
+https://dcsdvsdvsdwvv.com/path

@@ -291,13 +291,16 @@ const App: React.FC = () => {
         if (statsResponse?.status === 'OK') {
           const siteData = statsResponse.data;
           // If no stats exist for this site, it will be null - that's OK, show zeros
-          const score = siteData?.securityScore ?? 100;
           const trackers = siteData?.trackersBlocked ?? 0;
           const cookies = siteData?.cookiesBlocked ?? 0;
           const requests = siteData?.requestsAnalyzed ?? 0;
           const threats = siteData?.threatsDetected ?? 0;
           const thirdParty = siteData?.thirdPartyScripts ?? 0;
           const hasSSL = tabResponse.data.protocol === 'https:';
+          
+          // Get the REAL score from score breakdown (same calculation)
+          const breakdownResponse = await chrome.runtime.sendMessage({ type: 'GET_SCORE_BREAKDOWN', domain });
+          const score = breakdownResponse?.status === 'OK' ? breakdownResponse.data.score : (siteData?.securityScore ?? 100);
           const privacyPolicy = siteData?.privacyPolicyFound ?? false;
           const mixedContent = siteData?.mixedContent ?? false;
           
@@ -616,20 +619,20 @@ const App: React.FC = () => {
         
         {/* Logo */}
         <div className="flex items-center gap-3 mb-6 relative z-10">
-          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/40">
-            <ShieldIcon />
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center">
+            <img src="/icon48.png" alt="PRISM" className="w-14 h-14" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">PRISM</h1>
-            <p className="text-sm text-slate-400">Privacy & Security Monitor</p>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">PRISM</h1>
+            <p className="text-sm text-slate-400">v1.1.1 • Phase 7</p>
           </div>
         </div>
         
         {/* Status */}
-        <div className="text-center relative z-10 bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-xl px-6 py-3">
+        <div className="text-center relative z-10 bg-slate-800/40 backdrop-blur-sm border border-emerald-500/30 rounded-xl px-6 py-3 shadow-lg shadow-emerald-500/10">
           <div className="flex items-center justify-center gap-3">
             <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-lg shadow-emerald-500/50"></div>
-            <span className="text-sm font-medium text-slate-300">Extension Active</span>
+            <span className="text-sm font-medium text-emerald-300">Extension Active</span>
           </div>
           <p className="text-xs text-slate-500 mt-2">Navigate to a website to view security metrics</p>
         </div>
@@ -658,47 +661,6 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAnalytics(true)}
-              className="w-9 h-9 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-all"
-              title="Analytics Dashboard"
-            >
-              <BarChartIcon />
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="w-9 h-9 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-all"
-              title="Settings"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v6m0 6v6M1 12h6m6 0h6M4.2 4.2l4.3 4.3m5.8 5.8l4.3 4.3M4.2 19.8l4.3-4.3m5.8-5.8l4.3-4.3"/>
-              </svg>
-            </button>
-            {/* Quick Toggle: Extension On/Off */}
-            <button
-              onClick={toggleExtension}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-                extensionEnabled
-                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
-                  : 'bg-slate-700/50 text-slate-500 hover:bg-slate-600/50'
-              }`}
-              title={extensionEnabled ? 'Extension Enabled' : 'Extension Disabled'}
-            >
-              <ShieldIcon />
-            </button>
-            {/* Quick Toggle: Tracker Blocking On/Off */}
-            <button
-              onClick={toggleBlocking}
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-                blockingEnabled
-                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
-                  : 'bg-slate-700/50 text-slate-500 hover:bg-slate-600/50'
-              }`}
-              title={blockingEnabled ? 'Blocking Enabled' : 'Blocking Disabled'}
-            >
-              <XIcon />
-            </button>
             <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
               connectionStatus === 'connected' 
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
@@ -808,32 +770,11 @@ const App: React.FC = () => {
                             🚫
                           </span>
                         )}
-                        {/* AI Verification Badge */}
-                        {metrics.phishingDetected === 0 && (
-                          <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs font-semibold rounded border border-blue-500/30 flex items-center gap-1">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                              <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
-                            </svg>
-                            AI Verified
-                          </span>
-                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-slate-400 text-xs">
                           {tabInfo.protocol === 'https:' ? 'Secure Connection' : 'Not Secure'}
                         </p>
-                        <button
-                          onClick={toggleTrust}
-                          className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${
-                            trustLevel === 'trusted'
-                              ? 'bg-slate-600/50 hover:bg-slate-500/50 text-slate-300'
-                              : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300'
-                          }`}
-                          title={trustLevel === 'trusted' ? 'Remove from trusted' : 'Mark as trusted'}
-                        >
-                          {trustLevel === 'trusted' ? 'Untrust' : 'Trust'}
-                        </button>
                         {/* Access Blocked Site Button - Shows when site is blocked */}
                         {trustLevel === 'blocked' && (
                           <button
@@ -872,10 +813,10 @@ const App: React.FC = () => {
         {/* ML-Powered Phishing Detection - Always Visible */}
         {true && (
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-3xl blur-2xl"></div>
-            <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-xl border border-slate-600/30 rounded-3xl p-6 shadow-2xl">{/* Header */}
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-3xl blur-2xl"></div>
+            <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-xl border border-emerald-500/20 rounded-3xl p-6 shadow-2xl shadow-emerald-500/5">{/* Header */}
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-xl flex items-center justify-center">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                     <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -1033,7 +974,7 @@ const App: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           {/* Threats Detected - Only show when threats exist */}
           {metrics.threatsDetected > 0 && (
-            <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-red-500/30 transition-all duration-300">
+            <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all duration-300 shadow-lg shadow-red-500/5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center text-red-400">
                   <span className="text-lg">⚠️</span>
@@ -1046,7 +987,7 @@ const App: React.FC = () => {
           )}
 
           {/* Cookies Managed */}
-          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all duration-300 shadow-lg shadow-emerald-500/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
                 <CookieIcon />
@@ -1058,7 +999,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Requests Analyzed */}
-          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
+          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all duration-300 shadow-lg shadow-emerald-500/5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
                 <BarChartIcon />
@@ -1068,25 +1009,10 @@ const App: React.FC = () => {
             <p className="text-2xl font-bold text-white">{metrics.requestsAnalyzed}</p>
             <p className="text-xs text-slate-500 mt-1">Analyzed</p>
           </div>
-
-          {/* Phishing Blocked */}
-          <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-4 hover:border-emerald-500/30 transition-all duration-300">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <path d="M12 11v.01" strokeWidth="3" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <span className="text-slate-400 text-xs font-medium">Phishing</span>
-            </div>
-            <p className="text-2xl font-bold text-white">{metrics.phishingDetected}</p>
-            <p className="text-xs text-slate-500 mt-1">Blocked</p>
-          </div>
         </div>
 
         {/* Website Security Report */}
-        <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-slate-600/30 rounded-2xl p-5">
+        <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-emerald-500/20 rounded-2xl p-5 shadow-lg shadow-emerald-500/5">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-sm font-semibold text-white">Security Report</span>
           </div>
@@ -1163,8 +1089,8 @@ const App: React.FC = () => {
           <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl px-4 py-3">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-3">
-                <span className="text-slate-400">PRISM v{extensionData.version}</span>
-                <span className="text-slate-500">Phase {extensionData.phase}</span>
+                <span className="text-slate-400">PRISM v1.1.1</span>
+                <span className="text-slate-500">Phase 7</span>
               </div>
               {featureHealth && (
                 <button
