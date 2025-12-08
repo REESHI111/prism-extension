@@ -636,6 +636,37 @@ const App: React.FC = () => {
           </div>
           <p className="text-xs text-slate-500 mt-2">Navigate to a website to view security metrics</p>
         </div>
+
+        {/* Test Sites Button */}
+        <div className="relative z-10 mt-4">
+          <button
+            onClick={async () => {
+              const testUrls = [
+                'https://www.amazon.com/products',
+                'https://stackoverflow.com/questions',
+                'http://g00gle-verify.tk/login',
+                'http://faceb00k-security.com/verify',
+                'http://paypal.secure-account.xyz/update',
+                'http://192.168.1.1/admin/login.php',
+                'http://paypal.evil-site.xyz/login',
+                'https://verify-account-urgent.tk/login',
+                'https://dcsdvsdvsdwvv.com/path'
+              ];
+              
+              // Open all URLs with delay to avoid popup blocking
+              for (let i = 0; i < testUrls.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, i === 0 ? 0 : 300));
+                chrome.tabs.create({ url: testUrls[i], active: false });
+              }
+            }}
+            className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30 hover:border-purple-400/50 rounded-xl px-4 py-3 text-sm font-medium text-purple-200 hover:text-purple-100 transition-all shadow-lg shadow-purple-500/10 hover:shadow-purple-500/20"
+          >
+            🧪 Launch Test Sites (9 URLs)
+          </button>
+          <p className="text-xs text-slate-500 text-center mt-2">
+            Opens legitimate & phishing test URLs for demo
+          </p>
+        </div>
       </div>
     );
   }
