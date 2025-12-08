@@ -58,7 +58,8 @@ export interface CategoryScore {
 export interface ScoreBreakdown {
   trackers: CategoryScore;
   cookies: CategoryScore;
-  requests: CategoryScore;
+  totalRequests: CategoryScore;      // NEW: Separate category
+  thirdPartyRequests: CategoryScore; // NEW: Separate category
   mlCheck: CategoryScore;
   ssl: CategoryScore;
   privacyPolicy: CategoryScore;
@@ -82,7 +83,8 @@ export interface PrivacyScore {
 const CATEGORY_WEIGHTS = {
   trackers: 20,
   cookies: 18,
-  requests: 10,
+  totalRequests: 5,          // NEW: Total request count
+  thirdPartyRequests: 5,     // NEW: Third-party request ratio
   mlCheck: 15,
   ssl: 15,
   privacyPolicy: 7,
@@ -165,7 +167,8 @@ export class EnhancedPrivacyScorer {
     const breakdown: ScoreBreakdown = {
       trackers: this.scoreTrackers(factors),
       cookies: this.scoreCookies(factors, url),
-      requests: this.scoreRequests(factors, url),
+      totalRequests: this.scoreRequests(factors, url),
+      thirdPartyRequests: this.scoreThirdPartyRequestRatio(factors, url),
       mlCheck: this.scoreMLCheck(factors),
       ssl: this.scoreSSL(factors),
       privacyPolicy: this.scorePrivacyPolicy(factors),
@@ -250,7 +253,8 @@ export class EnhancedPrivacyScorer {
 
   /**
    * 2) Cookies - weight 18%
-   * ONLY penalize tracking cookies, NOT necessary ones
+   * ONLY penalize tracking cookies (third-party), NOT necessary ones (first-party)
+   * Formula: -1.8 points per 10 third-party cookies
    */
   private scoreCookies(factors: PrivacyFactors, url?: string): CategoryScore {
     const issues: string[] = [];
@@ -258,6 +262,7 @@ export class EnhancedPrivacyScorer {
     
     const total = factors.cookiesManaged || 0;
     const thirdParty = factors.thirdPartyCookies || 0;
+    const firstParty = total - thirdParty;
 
     // No cookies = perfect
     if (total === 0) {
@@ -270,39 +275,74 @@ export class EnhancedPrivacyScorer {
       };
     }
 
-    // Estimate tracking vs necessary
-    // Conservative: Only penalize third-party cookies (usually tracking)
-    const estimatedTracking = thirdParty;
-    
+    // Start at 100, penalize ONLY third-party cookies
+    // Formula: -1.8 points per 10 third-party cookies
     let score = 100;
+    const deduction = (thirdParty / 10) * 1.8;
+    score = Math.max(0, score - deduction);
     
-    if (estimatedTracking === 0) {
-      score = 100;  // All first-party (likely necessary)
-    } else if (estimatedTracking <= 5) {
-      score = 95;   // Minimal tracking
-    } else if (estimatedTracking <= 15) {
-      score = 80;   // Some tracking
-    } else if (estimatedTracking <= 30) {
-      score = 60;   // Moderate tracking
-    } else {
-      score = 30;   // Heavy tracking
-    }
+    // Round to 1 decimal for precision
+    score = Math.round(score * 10) / 10;
 
-    if (estimatedTracking > 10) {
-      issues.push(`${estimatedTracking} third-party cookies`);
-      recommendations.push('Block third-party tracking cookies');
-    } else if (total > 0) {
-      issues.push(`✓ Mostly necessary cookies (${total} total)`);
+    // Build issues list
+    if (thirdParty > 0) {
+      issues.push(`${thirdParty} third-party cookies (-${deduction.toFixed(1)} pts)`);
+      if (firstParty > 0) {
+        issues.push(`${firstParty} first-party cookies (no penalty)`);
+      }
+      if (thirdParty > 20) {
+        recommendations.push('Block third-party tracking cookies');
+      }
+    } else if (firstParty > 0) {
+      issues.push(`✓ Only necessary cookies (${firstParty} first-party)`);
     }
 
     return { score, weight: 0, weightedScore: 0, issues, recommendations };
   }
 
   /**
-   * 3) Requests - weight 10%
-   * ONLY penalize high third-party ratio, NOT total count
+   * 3) Total Requests - weight 5%
+   * Monitor total request count (informational, light penalty for excessive)
    */
   private scoreRequests(factors: PrivacyFactors, url?: string): CategoryScore {
+    const issues: string[] = [];
+    const recommendations: string[] = [];
+    
+    const total = factors.totalRequests || 0;
+    const firstParty = total - (factors.thirdPartyRequests || 0);
+    
+    if (total === 0) {
+      return {
+        score: 100,
+        weight: 0,
+        weightedScore: 0,
+        issues: ['✓ No requests analyzed yet'],
+        recommendations: []
+      };
+    }
+    
+    // Light penalty only for excessive requests (500+)
+    let score = 100;
+    if (total > 500) {
+      score = 70;  // Excessive
+      issues.push(`${total} total requests (very high)`);
+      recommendations.push('Site may be resource-heavy');
+    } else if (total > 200) {
+      score = 95;  // High but acceptable
+      issues.push(`${total} total requests`);
+    } else {
+      score = 100; // Normal
+      issues.push(`${total} total requests (${firstParty} first-party)`);
+    }
+
+    return { score, weight: 0, weightedScore: 0, issues, recommendations };
+  }
+
+  /**
+   * 3b) Third-Party Requests - weight 5%
+   * ONLY penalize high third-party ratio
+   */
+  private scoreThirdPartyRequestRatio(factors: PrivacyFactors, url?: string): CategoryScore {
     const issues: string[] = [];
     const recommendations: string[] = [];
     
@@ -314,36 +354,34 @@ export class EnhancedPrivacyScorer {
         score: 100,
         weight: 0,
         weightedScore: 0,
-        issues: [],
+        issues: ['✓ No third-party requests yet'],
         recommendations: []
       };
     }
     
     const thirdPartyRatio = total > 0 ? thirdParty / total : 0;
+    const ratioPercent = Math.round(thirdPartyRatio * 100);
 
-    // Score based ONLY on ratio (LIGHTER - CDN/video platforms need requests)
+    // Score based on ratio
     let score = 100;
     
     if (thirdPartyRatio <= 0.30) {
-      score = 100;  // 0-30% = Excellent (increased from 20%)
+      score = 100;  // 0-30% = Excellent
+      issues.push(`✓ Low third-party ratio (${ratioPercent}%)`);
     } else if (thirdPartyRatio <= 0.50) {
-      score = 95;   // 31-50% = Very Good (increased from 40%)
+      score = 95;   // 31-50% = Very Good
+      issues.push(`${ratioPercent}% third-party requests`);
     } else if (thirdPartyRatio <= 0.70) {
-      score = 85;   // 51-70% = Good (more lenient for CDN/video)
+      score = 85;   // 51-70% = Good (acceptable for CDN/media)
+      issues.push(`${ratioPercent}% third-party (acceptable for CDN)`);
     } else if (thirdPartyRatio <= 0.85) {
       score = 70;   // 71-85% = Fair
+      issues.push(`${ratioPercent}% third-party requests (high)`);
+      recommendations.push('Consider reducing third-party dependencies');
     } else {
       score = 50;   // 86%+ = Poor (only extreme cases)
-    }
-
-    const ratioPercent = Math.round(thirdPartyRatio * 100);
-    if (thirdPartyRatio > 0.70) {
-      issues.push(`${ratioPercent}% third-party requests`);
-      recommendations.push('Consider reducing third-party dependencies');
-    } else if (thirdPartyRatio > 0.50) {
-      issues.push(`${ratioPercent}% third-party (acceptable for CDN/media)`);
-    } else {
-      issues.push(`✓ Good third-party ratio (${ratioPercent}%)`);
+      issues.push(`${ratioPercent}% third-party requests (very high)`);
+      recommendations.push('Excessive third-party dependencies detected');
     }
 
     return { score, weight: 0, weightedScore: 0, issues, recommendations };

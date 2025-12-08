@@ -249,12 +249,27 @@ chrome.webRequest.onBeforeRequest.addListener(
 function updateCookieCount() {
   if (!currentDomain || !currentTabId) return;
   
-  // Query actual cookies for current domain
-  chrome.cookies.getAll({ domain: currentDomain }, (cookies) => {
-    const cookieCount = cookies.length;
-    const previousCount = tabCookieCounts.get(currentTabId!) || 0;
-    
-    if (cookieCount !== previousCount) {
+  // Query cookies for current domain AND all subdomains
+  const domainVariants = [
+    currentDomain,
+    `.${currentDomain}`,  // Subdomain wildcard
+  ];
+  
+  // Get cookies for main domain
+  chrome.cookies.getAll({ url: `https://${currentDomain}` }, (httpsCookies) => {
+    chrome.cookies.getAll({ url: `http://${currentDomain}` }, (httpCookies) => {
+      // Combine and deduplicate cookies
+      const allCookiesMap = new Map();
+      [...httpsCookies, ...httpCookies].forEach(cookie => {
+        const key = `${cookie.name}_${cookie.domain}_${cookie.path}`;
+        allCookiesMap.set(key, cookie);
+      });
+      
+      const cookies = Array.from(allCookiesMap.values());
+      const cookieCount = cookies.length;
+      const previousCount = tabCookieCounts.get(currentTabId!) || 0;
+      
+      // Always update (even if count is same, attributes might change)
       tabCookieCounts.set(currentTabId!, cookieCount);
       
       // Analyze cookie security attributes
@@ -262,11 +277,17 @@ function updateCookieCount() {
       const httpOnlyCookies = cookies.filter(c => c.httpOnly).length;
       const sameSiteCookies = cookies.filter(c => c.sameSite && c.sameSite !== 'no_restriction').length;
       
-      // Detect third-party cookies (domain doesn't match current domain)
+      // Detect third-party cookies with improved logic
       const thirdPartyCookies = cookies.filter(c => {
-        const cookieDomain = c.domain.replace(/^\./, ''); // Remove leading dot
-        return !currentDomain!.includes(cookieDomain) && !cookieDomain.includes(currentDomain!);
+        const cookieDomain = c.domain.replace(/^\.$/, '').replace(/^\./,''); // Clean domain
+        const baseDomain = currentDomain!.split('.').slice(-2).join('.'); // Get base domain (e.g., "example.com")
+        const cookieBaseDomain = cookieDomain.split('.').slice(-2).join('.');
+        
+        // Cookie is third-party if its base domain differs from page base domain
+        return cookieBaseDomain !== baseDomain;
       }).length;
+      
+      console.log(`🍪 Cookie count for ${currentDomain}: ${cookieCount} total, ${thirdPartyCookies} third-party`);
       
       // Update stats with enhanced cookie metrics
       stats.updateEnhancedCookieMetrics(currentDomain!, {
@@ -283,7 +304,7 @@ function updateCookieCount() {
         domain: currentDomain,
         stats: stats.getSiteStats(currentDomain!)
       }).catch(() => {});
-    }
+    });
   });
 }
 
@@ -334,8 +355,27 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       currentTabId = tabId;
       currentDomain = url.hostname;
       
-      // Update protocol info
-      stats.updateSiteProtocol(currentDomain, url.protocol, url.protocol === 'https:');
+      // Update protocol info with ACCURATE SSL detection
+      const hasValidSSL = url.protocol === 'https:';
+      stats.updateSiteProtocol(currentDomain, url.protocol, hasValidSSL);
+      
+      // Check SSL certificate validity for HTTPS sites
+      if (hasValidSSL) {
+        // Try to detect SSL issues via fetch API
+        fetch(changeInfo.url, { method: 'HEAD', mode: 'no-cors' })
+          .then(() => {
+            // SSL is valid (fetch succeeded)
+            stats.updateSSLStatus(currentDomain, true, false);
+          })
+          .catch((error) => {
+            // SSL might be invalid/expired
+            console.warn(`⚠️ Potential SSL issue for ${currentDomain}:`, error);
+            stats.updateSSLStatus(currentDomain, false, true);
+          });
+      } else {
+        // HTTP site - no SSL
+        stats.updateSSLStatus(currentDomain, false, false);
+      }
       
       // Reset third-party tracking for new page
       tabThirdPartyDomains.delete(tabId);
@@ -608,17 +648,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       // Get fresh cookie count for current tab
       if (siteDomain === currentDomain && currentTabId) {
-        chrome.cookies.getAll({ domain: siteDomain }, (cookies) => {
-          const actualCookieCount = cookies.length;
-          
-          // Analyze cookie security attributes
-          const secureCookies = cookies.filter(c => c.secure).length;
-          const httpOnlyCookies = cookies.filter(c => c.httpOnly).length;
-          const sameSiteCookies = cookies.filter(c => c.sameSite && c.sameSite !== 'no_restriction').length;
-          const thirdPartyCookies = cookies.filter(c => {
-            const cookieDomain = c.domain.replace(/^\./, '');
-            return !siteDomain.includes(cookieDomain) && !cookieDomain.includes(siteDomain);
-          }).length;
+        (async () => {
+          try {
+            // Query both HTTP and HTTPS to get ALL cookies
+            const httpsCookies = await chrome.cookies.getAll({ url: `https://${siteDomain}` });
+            const httpCookies = await chrome.cookies.getAll({ url: `http://${siteDomain}` });
+            
+            // Deduplicate cookies (same name + domain + path)
+            const allCookiesMap = new Map();
+            [...httpsCookies, ...httpCookies].forEach(cookie => {
+              const key = `${cookie.name}_${cookie.domain}_${cookie.path}`;
+              allCookiesMap.set(key, cookie);
+            });
+            
+            const cookies = Array.from(allCookiesMap.values());
+            const actualCookieCount = cookies.length;
+            
+            // Analyze cookie security attributes
+            const secureCookies = cookies.filter(c => c.secure).length;
+            const httpOnlyCookies = cookies.filter(c => c.httpOnly).length;
+            const sameSiteCookies = cookies.filter(c => c.sameSite && c.sameSite !== 'no_restriction').length;
+            
+            // Categorize third-party cookies properly
+            const baseDomain = siteDomain.split('.').slice(-2).join('.');
+            const thirdPartyCookies = cookies.filter(c => {
+              const cookieDomain = c.domain.replace(/^\./, '');
+              const cookieBaseDomain = cookieDomain.split('.').slice(-2).join('.');
+              return cookieBaseDomain !== baseDomain;
+            }).length;
           
           // Update stats with enhanced cookie metrics
           stats.updateEnhancedCookieMetrics(siteDomain, {
@@ -680,7 +737,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               }
             });
           }
-        });
+          } catch (error) {
+            console.error('Failed to get cookies for stats:', error);
+            sendResponse({ status: 'ERROR', message: 'Failed to retrieve site stats' });
+          }
+        })();
         return true; // Async response
       } else {
         // Not current tab, use cached stats
@@ -972,6 +1033,108 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       })();
       return true;  // Async response
+
+    case 'GET_THREAT_DETAILS':
+      // Get detailed threat information for a domain
+      {
+        const domain = message.domain;
+        if (!domain) {
+          sendResponse({ status: 'ERROR', message: 'No domain provided' });
+          break;
+        }
+
+        const siteStats = stats.getSiteStats(domain);
+        const threatDetails = siteStats?.threatDetails || [];
+        
+        sendResponse({
+          status: 'OK',
+          data: {
+            threats: threatDetails,
+            count: threatDetails.length,
+            domain: domain
+          }
+        });
+      }
+      break;
+
+    case 'GET_COOKIE_DETAILS':
+      // Get detailed cookie information for a domain
+      (async () => {
+        const domain = message.domain;
+        if (!domain) {
+          sendResponse({ status: 'ERROR', message: 'No domain provided' });
+          return;
+        }
+
+        try {
+          // Get all cookies for this domain
+          const httpsCookies = await chrome.cookies.getAll({ url: `https://${domain}` });
+          const httpCookies = await chrome.cookies.getAll({ url: `http://${domain}` });
+          
+          // Deduplicate
+          const allCookiesMap = new Map();
+          [...httpsCookies, ...httpCookies].forEach(cookie => {
+            const key = `${cookie.name}_${cookie.domain}_${cookie.path}`;
+            allCookiesMap.set(key, cookie);
+          });
+          
+          const cookies = Array.from(allCookiesMap.values());
+          
+          // Categorize cookies
+          const baseDomain = domain.split('.').slice(-2).join('.');
+          const firstParty: any[] = [];
+          const thirdParty: any[] = [];
+          
+          cookies.forEach(cookie => {
+            const cookieDomain = cookie.domain.replace(/^\./, '');
+            const cookieBaseDomain = cookieDomain.split('.').slice(-2).join('.');
+            
+            if (cookieBaseDomain === baseDomain) {
+              firstParty.push(cookie);
+            } else {
+              thirdParty.push(cookie);
+            }
+          });
+          
+          sendResponse({
+            status: 'OK',
+            data: {
+              total: cookies.length,
+              firstParty: firstParty,
+              thirdParty: thirdParty,
+              domain: domain
+            }
+          });
+        } catch (error) {
+          console.error('Failed to get cookies:', error);
+          sendResponse({ status: 'ERROR', message: 'Failed to retrieve cookies' });
+        }
+      })();
+      return true;
+
+    case 'GET_REQUEST_DETAILS':
+      // Get detailed request information for a domain
+      {
+        const domain = message.domain;
+        if (!domain) {
+          sendResponse({ status: 'ERROR', message: 'No domain provided' });
+          break;
+        }
+
+        const siteStats = stats.getSiteStats(domain);
+        
+        sendResponse({
+          status: 'OK',
+          data: {
+            total: siteStats?.totalRequests || siteStats?.requestsAnalyzed || 0,
+            thirdParty: siteStats?.thirdPartyRequests || 0,
+            firstParty: (siteStats?.totalRequests || 0) - (siteStats?.thirdPartyRequests || 0),
+            domain: domain,
+            thirdPartyDomains: Array.from(tabThirdPartyDomains.get(currentTabId!) || [])
+          }
+        });
+      }
+      break;
 
     case 'REQUEST_ML_ANALYSIS':
       // Popup is requesting ML analysis for current URL

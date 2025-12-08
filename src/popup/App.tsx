@@ -175,6 +175,27 @@ const App: React.FC = () => {
     sslError: null
   });
   const [mlAnalysis, setMlAnalysis] = useState<any>(null);
+  
+  // Detail modal states
+  const [showThreatsDetail, setShowThreatsDetail] = useState(false);
+  const [showCookiesDetail, setShowCookiesDetail] = useState(false);
+  const [showRequestsDetail, setShowRequestsDetail] = useState(false);
+  const [threatsDetailData, setThreatsDetailData] = useState<any>(null);
+  const [cookiesDetailData, setCookiesDetailData] = useState<any>(null);
+  const [requestsDetailData, setRequestsDetailData] = useState<any>(null);
+  
+  // Score breakdown expandable categories state
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (category: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(category)) {
+      newExpanded.delete(category);
+    } else {
+      newExpanded.add(category);
+    }
+    setExpandedCategories(newExpanded);
+  };
 
   useEffect(() => {
     initializeExtension();
@@ -292,10 +313,15 @@ const App: React.FC = () => {
           const siteData = statsResponse.data;
           // If no stats exist for this site, it will be null - that's OK, show zeros
           const trackers = siteData?.trackersBlocked ?? 0;
+          // Use cookiesBlocked for display (total cookies on site)
           const cookies = siteData?.cookiesBlocked ?? 0;
-          const requests = siteData?.requestsAnalyzed ?? 0;
+          // Use totalRequests for display (all network requests)
+          const requests = siteData?.totalRequests ?? siteData?.requestsAnalyzed ?? 0;
           const threats = siteData?.threatsDetected ?? 0;
-          const thirdParty = siteData?.thirdPartyScripts ?? 0;
+          // thirdPartyScripts = <script> tags from external domains (used in Security Report)
+          const thirdPartyScripts = siteData?.thirdPartyScripts ?? 0;
+          // thirdPartyRequests = network requests to external domains (different from scripts!)
+          const thirdPartyRequests = siteData?.thirdPartyRequests ?? 0;
           const hasSSL = tabResponse.data.protocol === 'https:';
           
           // Get the REAL score from score breakdown (same calculation)
@@ -319,14 +345,19 @@ const App: React.FC = () => {
             console.error('Failed to get ML detections:', error);
           }
           
-          // Calculate data collection level based on trackers + cookies + third-party
-          const dataScore = trackers + cookies + Math.floor(thirdParty / 2);
+          // Calculate data collection level based on trackers + cookies + third-party scripts
+          const dataScore = trackers + cookies + Math.floor(thirdPartyScripts / 2);
           let dataLevel: 'Minimal' | 'Moderate' | 'High' | 'Excessive' = 'Minimal';
           if (dataScore > 100) dataLevel = 'Excessive';
           else if (dataScore > 50) dataLevel = 'High';
           else if (dataScore > 20) dataLevel = 'Moderate';
           
-          console.log('📊 Stats loaded:', { domain, score, trackers, cookies, requests, threats, thirdParty, hasSSL, privacyPolicy, mixedContent, phishingCount });
+          console.log('📊 Stats loaded:', { 
+            domain, score, trackers, cookies, requests, threats, 
+            thirdPartyScripts, // <script> tags from external domains
+            thirdPartyRequests, // Network requests to external domains (different!)
+            hasSSL, privacyPolicy, mixedContent, phishingCount 
+          });
           
           // Use ML data from the loaded result directly (not from state due to async updates)
           const mlRiskScore = mlResult?.risk_score ?? 0;
@@ -355,7 +386,7 @@ const App: React.FC = () => {
             hasSSL,
             protocol: tabResponse.data.protocol,
             privacyPolicyFound: privacyPolicy,
-            thirdPartyScripts: thirdParty,
+            thirdPartyScripts: thirdPartyScripts, // <script> tags from external domains
             mixedContent,
             dataCollectionLevel: dataLevel
           });
@@ -569,6 +600,61 @@ const App: React.FC = () => {
       setTrustLevel('blocked');
     } catch (error) {
       console.error('Failed to block site:', error);
+    }
+  };
+
+  // Detail modal data loading functions
+  const loadThreatsDetail = async () => {
+    if (!tabInfo?.domain) return;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_THREAT_DETAILS',
+        domain: tabInfo.domain
+      });
+      
+      if (response.status === 'OK') {
+        setThreatsDetailData(response.data);
+        setShowThreatsDetail(true);
+      }
+    } catch (error) {
+      console.error('Failed to load threat details:', error);
+    }
+  };
+
+  const loadCookiesDetail = async () => {
+    if (!tabInfo?.domain) return;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_COOKIE_DETAILS',
+        domain: tabInfo.domain
+      });
+      
+      if (response.status === 'OK') {
+        setCookiesDetailData(response.data);
+        setShowCookiesDetail(true);
+      }
+    } catch (error) {
+      console.error('Failed to load cookie details:', error);
+    }
+  };
+
+  const loadRequestsDetail = async () => {
+    if (!tabInfo?.domain) return;
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GET_REQUEST_DETAILS',
+        domain: tabInfo.domain
+      });
+      
+      if (response.status === 'OK') {
+        setRequestsDetailData(response.data);
+        setShowRequestsDetail(true);
+      }
+    } catch (error) {
+      console.error('Failed to load request details:', error);
     }
   };
 
@@ -1006,11 +1092,20 @@ const App: React.FC = () => {
           {/* Threats Detected - Only show when threats exist */}
           {metrics.threatsDetected > 0 && (
             <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all duration-300 shadow-lg shadow-red-500/5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center text-red-400">
-                  <span className="text-lg">⚠️</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center text-red-400">
+                    <span className="text-lg">⚠️</span>
+                  </div>
+                  <span className="text-slate-400 text-xs font-medium">Threats</span>
                 </div>
-                <span className="text-slate-400 text-xs font-medium">Threats</span>
+                <button
+                  onClick={loadThreatsDetail}
+                  className="w-5 h-5 bg-slate-700/50 hover:bg-slate-600/50 rounded-md flex items-center justify-center text-slate-400 hover:text-red-400 transition-all"
+                  title="View Threat Details"
+                >
+                  <InfoIcon />
+                </button>
               </div>
               <p className="text-2xl font-bold text-white">{metrics.threatsDetected}</p>
               <p className="text-xs text-slate-500 mt-1">Detected</p>
@@ -1019,11 +1114,20 @@ const App: React.FC = () => {
 
           {/* Cookies Managed */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all duration-300 shadow-lg shadow-emerald-500/5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
-                <CookieIcon />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                  <CookieIcon />
+                </div>
+                <span className="text-slate-400 text-xs font-medium">Cookies</span>
               </div>
-              <span className="text-slate-400 text-xs font-medium">Cookies</span>
+              <button
+                onClick={loadCookiesDetail}
+                className="w-5 h-5 bg-slate-700/50 hover:bg-slate-600/50 rounded-md flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-all"
+                title="View Cookie Details"
+              >
+                <InfoIcon />
+              </button>
             </div>
             <p className="text-2xl font-bold text-white">{metrics.cookiesManaged}</p>
             <p className="text-xs text-slate-500 mt-1">Managed</p>
@@ -1031,11 +1135,20 @@ const App: React.FC = () => {
 
           {/* Requests Analyzed */}
           <div className="bg-gradient-to-br from-slate-800/60 to-slate-700/60 backdrop-blur-xl border border-emerald-500/20 rounded-2xl p-4 hover:border-emerald-500/40 transition-all duration-300 shadow-lg shadow-emerald-500/5">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
-                <BarChartIcon />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center text-emerald-400">
+                  <BarChartIcon />
+                </div>
+                <span className="text-slate-400 text-xs font-medium">Requests</span>
               </div>
-              <span className="text-slate-400 text-xs font-medium">Requests</span>
+              <button
+                onClick={loadRequestsDetail}
+                className="w-5 h-5 bg-slate-700/50 hover:bg-slate-600/50 rounded-md flex items-center justify-center text-slate-400 hover:text-emerald-400 transition-all"
+                title="View Request Details"
+              >
+                <InfoIcon />
+              </button>
             </div>
             <p className="text-2xl font-bold text-white">{metrics.requestsAnalyzed}</p>
             <p className="text-xs text-slate-500 mt-1">Analyzed</p>
@@ -1171,40 +1284,115 @@ const App: React.FC = () => {
 
               {/* Category Breakdown */}
               <div className="space-y-3 mb-4">
-                {Object.entries(scoreBreakdown.breakdown).map(([category, data]: [string, any]) => (
-                  <div key={category} className="bg-slate-700/20 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-white capitalize">
-                        {category.replace(/([A-Z])/g, ' $1').trim()}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-slate-400">×{data.weight}%</span>
-                        <span className="text-sm font-bold text-emerald-400">
-                          {data.weightedScore.toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-slate-600/50 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-500"
-                          style={{ width: `${data.score}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-slate-400 w-10 text-right">{data.score}/100</span>
-                    </div>
-                    {data.issues.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {data.issues.slice(0, 2).map((issue: string, idx: number) => (
-                          <div key={idx} className="text-xs text-orange-400 flex items-start gap-1">
-                            <span>•</span>
-                            <span>{issue}</span>
+                {Object.entries(scoreBreakdown.breakdown).map(([category, data]: [string, any]) => {
+                  const isExpanded = expandedCategories.has(category);
+                  return (
+                    <div key={category} className="bg-slate-700/20 rounded-lg overflow-hidden">
+                      <div 
+                        className="p-3 cursor-pointer hover:bg-slate-700/30 transition-all"
+                        onClick={() => toggleCategory(category)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <button className="w-5 h-5 bg-slate-700/50 hover:bg-slate-600/50 rounded-md flex items-center justify-center text-slate-400 transition-all">
+                              <InfoIcon />
+                            </button>
+                            <span className="text-sm font-medium text-white capitalize">
+                              {category.replace(/([A-Z])/g, ' $1').trim()}
+                            </span>
                           </div>
-                        ))}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400">×{data.weight}%</span>
+                            <span className="text-sm font-bold text-emerald-400">
+                              {data.weightedScore.toFixed(1)}
+                            </span>
+                            <span className={`text-xs text-slate-500 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                              ▼
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-slate-600/50 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-blue-500 transition-all duration-500"
+                              style={{ width: `${data.score}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-400 w-10 text-right">{data.score}/100</span>
+                        </div>
+                        {!isExpanded && data.issues.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs text-orange-400 flex items-start gap-1">
+                              <span>•</span>
+                              <span>{data.issues[0]}</span>
+                            </div>
+                            {data.issues.length > 1 && (
+                              <div className="text-xs text-slate-500 mt-1">
+                                +{data.issues.length - 1} more issue{data.issues.length > 2 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      
+                      {/* Expanded Details */}
+                      {isExpanded && (
+                        <div className="px-3 pb-3 space-y-3 border-t border-slate-600/30 pt-3">
+                          {/* Score Details */}
+                          <div className="bg-slate-800/50 rounded-lg p-3">
+                            <div className="text-xs font-semibold text-slate-300 mb-2">Score Calculation</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="text-slate-400">Base Score:</div>
+                              <div className="text-white text-right">{data.score}/100</div>
+                              <div className="text-slate-400">Weight:</div>
+                              <div className="text-white text-right">{data.weight}%</div>
+                              <div className="text-slate-400 font-semibold">Contribution:</div>
+                              <div className="text-emerald-400 text-right font-semibold">{data.weightedScore.toFixed(2)} pts</div>
+                            </div>
+                          </div>
+                          
+                          {/* Issues */}
+                          {data.issues.length > 0 && (
+                            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                              <div className="text-xs font-semibold text-orange-400 mb-2">⚠ Issues Detected</div>
+                              <div className="space-y-1">
+                                {data.issues.map((issue: string, idx: number) => (
+                                  <div key={idx} className="text-xs text-orange-300 flex items-start gap-1">
+                                    <span>•</span>
+                                    <span>{issue}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Recommendations */}
+                          {data.recommendations && data.recommendations.length > 0 && (
+                            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                              <div className="text-xs font-semibold text-blue-400 mb-2">💡 Recommendations</div>
+                              <div className="space-y-1">
+                                {data.recommendations.map((rec: string, idx: number) => (
+                                  <div key={idx} className="text-xs text-blue-300 flex items-start gap-1">
+                                    <span>•</span>
+                                    <span>{rec}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* No issues - positive feedback */}
+                          {data.issues.length === 0 && (!data.recommendations || data.recommendations.length === 0) && (
+                            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-center">
+                              <div className="text-2xl mb-1">✓</div>
+                              <div className="text-xs text-emerald-300">No issues detected in this category</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Global Penalties */}
@@ -1230,6 +1418,217 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Threats Detail Modal */}
+      {showThreatsDetail && threatsDetailData && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Threat Details</h3>
+                <button
+                  onClick={() => setShowThreatsDetail(false)}
+                  className="w-8 h-8 bg-slate-700/50 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-slate-400">Total Threats</span>
+                    <span className="text-lg font-bold text-red-400">{threatsDetailData.count}</span>
+                  </div>
+                  <div className="text-xs text-slate-500">Domain: {threatsDetailData.domain}</div>
+                </div>
+
+                {threatsDetailData.threats.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <div className="text-4xl mb-2">✓</div>
+                    <div className="text-sm">No threats detected</div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {threatsDetailData.threats.map((threat: any, idx: number) => (
+                      <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <span className="text-red-400 text-lg mt-0.5">⚠️</span>
+                          <div className="flex-1">
+                            <div className="text-sm font-semibold text-red-300 mb-1">{threat.name || threat.type}</div>
+                            <div className="text-xs text-slate-400 mb-1">Type: {threat.type}</div>
+                            {threat.description && (
+                              <div className="text-xs text-slate-300">{threat.description}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cookies Detail Modal */}
+      {showCookiesDetail && cookiesDetailData && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Cookie Details</h3>
+                <button
+                  onClick={() => setShowCookiesDetail(false)}
+                  className="w-8 h-8 bg-slate-700/50 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 text-center">
+                    <div className="text-xs text-slate-400 mb-1">Total</div>
+                    <div className="text-lg font-bold text-white">{cookiesDetailData.total}</div>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-emerald-400 mb-1">First-Party</div>
+                    <div className="text-lg font-bold text-emerald-300">{cookiesDetailData.firstParty.length}</div>
+                  </div>
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-yellow-400 mb-1">Third-Party</div>
+                    <div className="text-lg font-bold text-yellow-300">{cookiesDetailData.thirdParty.length}</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-500">Domain: {cookiesDetailData.domain}</div>
+                </div>
+
+                {/* First-Party Cookies */}
+                {cookiesDetailData.firstParty.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-emerald-400">First-Party Cookies</div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {cookiesDetailData.firstParty.slice(0, 10).map((cookie: any, idx: number) => (
+                        <div key={idx} className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2">
+                          <div className="text-xs font-semibold text-emerald-300 mb-1">{cookie.name}</div>
+                          <div className="text-xs text-slate-400">Domain: {cookie.domain}</div>
+                          <div className="flex gap-2 mt-1">
+                            {cookie.secure && <span className="text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">🔒 Secure</span>}
+                            {cookie.httpOnly && <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">HTTP Only</span>}
+                          </div>
+                        </div>
+                      ))}
+                      {cookiesDetailData.firstParty.length > 10 && (
+                        <div className="text-xs text-slate-500 text-center py-2">
+                          ... and {cookiesDetailData.firstParty.length - 10} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Third-Party Cookies */}
+                {cookiesDetailData.thirdParty.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-yellow-400">Third-Party Cookies</div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {cookiesDetailData.thirdParty.slice(0, 10).map((cookie: any, idx: number) => (
+                        <div key={idx} className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2">
+                          <div className="text-xs font-semibold text-yellow-300 mb-1">{cookie.name}</div>
+                          <div className="text-xs text-slate-400">Domain: {cookie.domain}</div>
+                          <div className="flex gap-2 mt-1">
+                            {cookie.secure && <span className="text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">🔒 Secure</span>}
+                            {cookie.httpOnly && <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">HTTP Only</span>}
+                          </div>
+                        </div>
+                      ))}
+                      {cookiesDetailData.thirdParty.length > 10 && (
+                        <div className="text-xs text-slate-500 text-center py-2">
+                          ... and {cookiesDetailData.thirdParty.length - 10} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requests Detail Modal */}
+      {showRequestsDetail && requestsDetailData && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 overflow-y-auto">
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Request Details</h3>
+                <button
+                  onClick={() => setShowRequestsDetail(false)}
+                  className="w-8 h-8 bg-slate-700/50 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3 text-center">
+                    <div className="text-xs text-slate-400 mb-1">Total</div>
+                    <div className="text-lg font-bold text-white">{requestsDetailData.total}</div>
+                  </div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-emerald-400 mb-1">First-Party</div>
+                    <div className="text-lg font-bold text-emerald-300">{requestsDetailData.firstParty}</div>
+                  </div>
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+                    <div className="text-xs text-yellow-400 mb-1">Third-Party</div>
+                    <div className="text-lg font-bold text-yellow-300">{requestsDetailData.thirdParty}</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-3">
+                  <div className="text-xs text-slate-500 mb-2">Domain: {requestsDetailData.domain}</div>
+                  <div className="text-xs text-slate-400">
+                    Third-Party Ratio: {requestsDetailData.total > 0 
+                      ? ((requestsDetailData.thirdParty / requestsDetailData.total) * 100).toFixed(1)
+                      : 0}%
+                  </div>
+                </div>
+
+                {/* Third-Party Domains */}
+                {requestsDetailData.thirdPartyDomains && requestsDetailData.thirdPartyDomains.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-yellow-400">Third-Party Domains</div>
+                    <div className="space-y-1 max-h-64 overflow-y-auto bg-slate-800/30 border border-slate-700/50 rounded-lg p-3">
+                      {requestsDetailData.thirdPartyDomains.slice(0, 20).map((domain: string, idx: number) => (
+                        <div key={idx} className="text-xs text-slate-300 flex items-start gap-2">
+                          <span className="text-yellow-400">•</span>
+                          <span className="break-all">{domain}</span>
+                        </div>
+                      ))}
+                      {requestsDetailData.thirdPartyDomains.length > 20 && (
+                        <div className="text-xs text-slate-500 text-center py-2 border-t border-slate-700/50 mt-2">
+                          ... and {requestsDetailData.thirdPartyDomains.length - 20} more domains
+                        </div>
+                      )}
+                      {requestsDetailData.thirdPartyDomains.length === 0 && (
+                        <div className="text-xs text-slate-500 text-center py-4">
+                          No third-party domains detected
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

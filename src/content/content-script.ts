@@ -313,41 +313,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Detect privacy policy on page
+// Detect privacy policy on page with comprehensive search
 function detectPrivacyPolicy(): boolean {
   const privacyKeywords = [
     'privacy policy',
     'privacy-policy',
     'privacy_policy',
     'privacypolicy',
+    'privacy notice',
+    'privacy statement',
+    'data protection',
+    'data privacy',
     'datenschutz',
-    'politique de confidentialité'
+    'politique de confidentialité',
+    'política de privacidad',
+    'informativa sulla privacy'
   ];
   
-  // Check for links containing privacy keywords
+  const commonPaths = [
+    '/privacy',
+    '/privacy-policy',
+    '/legal/privacy',
+    '/privacy.html',
+    '/pages/privacy',
+    '/policy/privacy'
+  ];
+  
+  // 1. Check for links containing privacy keywords
   const links = Array.from(document.querySelectorAll('a'));
   for (const link of links) {
     const href = link.getAttribute('href')?.toLowerCase() || '';
-    const text = link.textContent?.toLowerCase() || '';
+    const text = link.textContent?.toLowerCase().trim() || '';
     
+    // Check keywords in href or text
     for (const keyword of privacyKeywords) {
       if (href.includes(keyword) || text.includes(keyword)) {
+        console.log(`✅ Privacy policy link found: "${text}" -> ${href}`);
+        return true;
+      }
+    }
+    
+    // Check common paths
+    for (const path of commonPaths) {
+      if (href.includes(path)) {
+        console.log(`✅ Privacy policy found at common path: ${href}`);
         return true;
       }
     }
   }
   
-  // Check meta tags
+  // 2. Check meta tags
   const metaTags = Array.from(document.querySelectorAll('meta'));
   for (const meta of metaTags) {
     const content = meta.getAttribute('content')?.toLowerCase() || '';
+    const name = meta.getAttribute('name')?.toLowerCase() || '';
+    
     for (const keyword of privacyKeywords) {
-      if (content.includes(keyword)) {
+      if (content.includes(keyword) || name.includes(keyword)) {
+        console.log(`✅ Privacy policy found in meta tag: ${name}`);
         return true;
       }
     }
   }
   
+  // 3. Check footer content (common location for privacy links)
+  const footer = document.querySelector('footer');
+  if (footer) {
+    const footerText = footer.textContent?.toLowerCase() || '';
+    for (const keyword of privacyKeywords) {
+      if (footerText.includes(keyword)) {
+        console.log(`✅ Privacy policy found in footer`);
+        return true;
+      }
+    }
+  }
+  
+  // 4. Check for common privacy-related elements
+  const privacyElements = document.querySelectorAll('[href*="privacy"], [id*="privacy"], [class*="privacy"]');
+  if (privacyElements.length > 0) {
+    console.log(`✅ Privacy policy found via element attributes (${privacyElements.length} matches)`);
+    return true;
+  }
+  
+  console.log('❌ No privacy policy found on page');
   return false;
 }
 

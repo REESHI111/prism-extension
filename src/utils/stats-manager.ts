@@ -28,6 +28,8 @@ export interface SiteStats {
   securityScore: number;
   protocol: string;
   hasSSL: boolean;
+  sslValid?: boolean;  // Whether SSL certificate is valid
+  sslExpired?: boolean; // Whether SSL certificate is expired
   
   // Enhanced metrics for weighted scoring
   trackerVendors?: string[];
@@ -523,10 +525,10 @@ export class StatsManager {
       threatsDetected: stats.threatsDetected || 0,
       domainAge: stats.domainAge || 365, // Default: 1 year old = trusted
       
-      // SSL (default: assume HTTPS with strong TLS)
-      hasSSL: stats.hasSSL ?? true,
-      sslStrength: stats.sslStrength || 'strong',
-      sslExpired: stats.sslExpiry ? stats.sslExpiry < Date.now() : false,
+      // SSL (accurate detection, don't default to true)
+      hasSSL: stats.hasSSL ?? false,
+      sslStrength: stats.sslStrength || (stats.hasSSL && stats.sslValid ? 'strong' : 'weak'),
+      sslExpired: stats.sslExpired ?? false,
       
       // Privacy Policy
       hasPrivacyPolicy: stats.privacyPolicyFound || false,
@@ -573,11 +575,56 @@ export class StatsManager {
         timestamp: Date.now(),
         securityScore: 100,
         protocol,
-        hasSSL
+        hasSSL,
+        sslValid: hasSSL, // Default to true if HTTPS
+        sslExpired: false
       };
     } else {
       stats.protocol = protocol;
       stats.hasSSL = hasSSL;
+      if (!hasSSL) {
+        stats.sslValid = false;
+        stats.sslExpired = false;
+      }
+    }
+    
+    stats.securityScore = this.calculateEnhancedSecurityScore(stats);
+    this.currentSiteStats.set(domain, stats);
+    this.saveStats();
+  }
+
+  /**
+   * Update SSL certificate validation status
+   */
+  updateSSLStatus(domain: string, valid: boolean, expired: boolean): void {
+    let stats = this.currentSiteStats.get(domain);
+    if (!stats) {
+      stats = {
+        url: '',
+        domain,
+        trackersBlocked: 0,
+        cookiesBlocked: 0,
+        requestsAnalyzed: 0,
+        threatsDetected: 0,
+        fingerprintAttempts: 0,
+        thirdPartyScripts: 0,
+        mixedContent: false,
+        privacyPolicyFound: false,
+        timestamp: Date.now(),
+        securityScore: 100,
+        protocol: valid ? 'https:' : 'http:',
+        hasSSL: valid,
+        sslValid: valid,
+        sslExpired: expired
+      };
+    } else {
+      stats.sslValid = valid;
+      stats.sslExpired = expired;
+      
+      // Update hasSSL based on validity
+      if (!valid && !expired) {
+        stats.hasSSL = false; // No HTTPS at all
+      }
     }
     
     stats.securityScore = this.calculateEnhancedSecurityScore(stats);
