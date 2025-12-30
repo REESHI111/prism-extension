@@ -31,14 +31,6 @@ PRISM is a comprehensive browser extension that provides real-time privacy and s
 
 ---
 
-## 📦 Installation
-
-### From Chrome Web Store
-1. Visit [Chrome Web Store - PRISM](https://chrome.google.com/webstore) (link TBD)
-2. Click "Add to Chrome"
-3. Confirm permissions
-4. Click the PRISM icon in your toolbar
-
 ### Development Installation
 1. Clone the repository:
    ```bash
@@ -78,34 +70,6 @@ See [Doc/QUICK_START.md](Doc/QUICK_START.md) for detailed getting started guide.
 **Test the Extension:**
 ```bash
 npm test
-```
-
-See [Doc/TESTING_GUIDE.md](Doc/TESTING_GUIDE.md) for comprehensive testing instructions.
-
----
-
-## 📚 Documentation
-
-### User Documentation
-- **[Quick Start Guide](Doc/QUICK_START.md)** - Get up and running quickly
-- **[Testing Guide](Doc/TESTING_GUIDE.md)** - How to test the extension
-
-### Technical Documentation
-- **[Architecture](Doc/ARCHITECTURE.md)** - System design and component overview
-- **[Development Roadmap](Doc/DEVELOPMENT_ROADMAP.md)** - Future plans and milestones
-
-### ML Model Documentation
-- **[ML Features (55 Features)](Doc/ML_FEATURES_DOCUMENTATION.md)** - Complete guide to all ML features
-- **[ML Training Pipeline](Doc/ML_TRAINING_DOCUMENTATION.md)** - How the model is trained and deployed
-
-### Privacy & Security Documentation
-- **[Data Collection Methods](Doc/DATA_COLLECTION_DOCUMENTATION.md)** - How we gather website data
-- **[Scoring System](Doc/SCORING_SYSTEM_DOCUMENTATION.md)** - Complete scoring formula breakdown
-- **[Scoring Categories Details](Doc/SCORING_CATEGORIES_DETAILED.md)** - In-depth category explanations
-
-### ML-Specific
-- **[ML README](ml/README.md)** - Machine learning model details
-
 ---
 
 ## 🏗️ Project Structure
@@ -271,26 +235,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-- **Your Name** - *Initial work*
-
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - Chrome Extension API documentation
 - scikit-learn community
 - React community
 - Open source tracker lists
 - Privacy-focused browser extension community
-
----
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/PRISM/issues)
-- **Documentation**: [Doc folder](Doc/)
-- **Email**: your.email@example.com
-
+- 
 ---
 
 ## 🔖 Version History
@@ -305,5 +259,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **v0.5.0 (Phase 1)** - Basic security analysis
 
 ---
-
-**⭐ If you find PRISM useful, please star this repository!**
