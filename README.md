@@ -72,26 +72,26 @@ See [Doc/QUICK_START.md](Doc/QUICK_START.md) for detailed getting started guide.
 npm test
 ---
 
-## 🏗️ Project Structure
+<details>
+<summary><strong>📁 Project Structure</strong></summary>
 
-```
+```text
 PRISM/
-├── src/                      # Extension source code
-│   ├── background/           # Background service worker
-│   ├── content/              # Content scripts
-│   ├── popup/                # Popup UI (React)
-│   └── utils/                # Utility functions
-├── ml/                       # Machine learning model
-│   ├── src/                  # ML source code
-│   ├── data/                 # Training data
-│   ├── models/               # Trained models
-│   └── notebooks/            # Jupyter notebooks
-├── public/                   # Static assets
-├── tests/                    # Test files
-├── Doc/                      # Documentation
-└── dist/                     # Built extension (generated)
-```
-
+├── src/
+│   ├── background/
+│   ├── content/
+│   ├── popup/
+│   └── utils/
+├── ml/
+│   ├── src/
+│   ├── data/
+│   ├── models/
+│   └── notebooks/
+├── public/
+├── tests/
+├── Doc/
+└── dist/
+</details> ```
 ---
 
 ## 🔧 Development
