@@ -730,6 +730,7 @@ const App: React.FC = () => {
               const testUrls = [
                 'https://www.amazon.com/products',
                 'https://stackoverflow.com/questions',
+                'https://edition.cnn.com/',
                 'http://g00gle-verify.tk/login',
                 'http://faceb00k-security.com/verify',
                 'http://paypal.secure-account.xyz/update',
@@ -747,7 +748,7 @@ const App: React.FC = () => {
             }}
             className="w-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-500/30 hover:border-purple-400/50 rounded-xl px-4 py-3 text-sm font-medium text-purple-200 hover:text-purple-100 transition-all shadow-lg shadow-purple-500/10 hover:shadow-purple-500/20"
           >
-            🧪 Launch Test Sites (9 URLs)
+            🧪 Launch Test Sites (10 URLs)
           </button>
           <p className="text-xs text-slate-500 text-center mt-2">
             Opens legitimate & phishing test URLs for demo
